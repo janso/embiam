@@ -16,7 +16,7 @@ func Initialize(aEntityModel EntityModelInterface) {
 
 	// read configuration
 	var err error
-	configuration, err = entityModel.LoadConfiguration()
+	Configuration, err = entityModel.LoadConfiguration()
 	if err != nil {
 		log.Fatalln("Error loading configuration")
 	}
@@ -24,6 +24,9 @@ func Initialize(aEntityModel EntityModelInterface) {
 	//  initialize the token cache
 	identityTokenCache := identityTokenCacheType{}
 	identityTokenCache.Cache = make(identityTokenCacheItemSlice, 0, 1024)
+
+	// initialize randomizer
+	rand.Seed(time.Now().UTC().UnixNano())
 }
 
 // GetIdentityToken checks nick and password and provides and identity token (for the remote address)
@@ -43,8 +46,8 @@ func GetIdentityToken(nick, password, remoteAddr string) (identityTokenStruct, e
 	identityToken.IdentityToken = GenerateToken(16)
 
 	// set end of validity
-	minutes := configuration.IdentityTokenValidityMinutes // get number of minutes from config
-	identityToken.ValidUntil = time.Now().UTC().Add(time.Minute * time.Duration(minutes))
+	seconds := Configuration.IdentityTokenValiditySeconds // get number of minutes from config
+	identityToken.ValidUntil = time.Now().UTC().Add(time.Second * time.Duration(seconds))
 
 	// save identity token, validity and remove address in cache
 	identityTokenCache.add(identityToken.IdentityToken, identityToken.ValidUntil, remoteAddr)
@@ -73,6 +76,35 @@ type Entity struct {
 	WrongPasswordCounter int       `json:"WrongPasswordCounter"`
 	CreateTimeStamp      time.Time `json:"createTimeStamp"`
 	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
+}
+
+// Save uses the entity model to save 'e' persistently
+func (e Entity) Save() error {
+	return entityModel.Save(&e)
+}
+
+// NewEntity creates a new entity
+func NewEntity() Entity {
+	// create entity with password and secret
+	e := Entity{
+		Nick:                 "",
+		PasswordHash:         "",
+		SecretHash:           "",
+		Active:               false,
+		LastSingIn:           time.Time{},
+		WrongPasswordCounter: 0,
+		CreateTimeStamp:      time.Now(),
+		UpdateTimeStamp:      time.Time{},
+	}
+
+	// generate a unique nick
+	for {
+		e.Nick = GenerateNick()
+		if !entityModel.NickExists(e.Nick) {
+			break
+		}
+	}
+	return e
 }
 
 /*

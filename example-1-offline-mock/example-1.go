@@ -19,8 +19,9 @@ func main() {
 	}
 	fmt.Printf("Identity was validated and an identity token was provided: %s\n\n", identityToken)
 
-	// with the provided identity token, the user can e.g. apis
-	// when an api is called, the client passes the identity token back to server and the server checks it
+	// With the provided identity token, the user can e.g. call APIs
+	// When an API is called, the client passes the identity token back to the server
+	// The server checks the identity token quickly
 	if embiam.IsIdentityTokenValid(identityToken.IdentityToken, "localhost") {
 		fmt.Printf("Identity token is valid.")
 	} else {
