@@ -9,18 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Entity describes a user or a device
-type Entity struct {
-	Nick                 string    `json:"nick"`
-	PasswordHash         string    `json:"passwordHash"`
-	SecretHash           string    `json:"secretHash"`
-	Active               bool      `json:"active"`
-	LastSingIn           time.Time `json:"lastSingIn"`
-	WrongPasswordCounter int       `json:"WrongPasswordCounter"`
-	CreateTimeStamp      time.Time `json:"createTimeStamp"`
-	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
-}
-
+// Initialize prepares embiam for usages
 func Initialize(aEntityModel EntityModelInterface) {
 	// set model (to access persistency)
 	entityModel = aEntityModel
@@ -33,17 +22,13 @@ func Initialize(aEntityModel EntityModelInterface) {
 	}
 
 	//  initialize the token cache
-	identityTokenCache := IdentityTokenCacheType{}
-	identityTokenCache.Cache = make(IdentityTokenCacheItemSlice, 0, 1024)
+	identityTokenCache := identityTokenCacheType{}
+	identityTokenCache.Cache = make(identityTokenCacheItemSlice, 0, 1024)
 }
 
-/*
-	*******************************************************************
-		Entity
-	*******************************************************************
-*/
-func GetIdentityToken(nick, password, remoteAddr string) (IdentityTokenStruct, error) {
-	identityToken := IdentityTokenStruct{}
+// GetIdentityToken checks nick and password and provides and identity token (for the remote address)
+func GetIdentityToken(nick, password, remoteAddr string) (identityTokenStruct, error) {
+	identityToken := identityTokenStruct{}
 	entity, err := entityModel.ReadByNick(nick)
 	if err != nil {
 		return identityToken, errors.New("nick not found")
@@ -61,16 +46,33 @@ func GetIdentityToken(nick, password, remoteAddr string) (IdentityTokenStruct, e
 	minutes := configuration.IdentityTokenValidityMinutes // get number of minutes from config
 	identityToken.ValidUntil = time.Now().UTC().Add(time.Minute * time.Duration(minutes))
 
-	// generate item for auth token cache
-	identityTokenCacheItem := IdentityTokenCacheItemStruct{
-		Nick:          nick,
-		IdentityToken: identityToken.IdentityToken,
-		ValidUntil:    identityToken.ValidUntil,
-		ValidFor:      remoteAddr,
-	}
-	identityTokenCache.Add(identityTokenCacheItem)
+	// save identity token, validity and remove address in cache
+	identityTokenCache.add(identityToken.IdentityToken, identityToken.ValidUntil, remoteAddr)
 
+	// return identityToken (with token and valid until)
 	return identityToken, nil
+}
+
+// IsIdentityTokenValid check if the identity token is valid for validUntil and validFor
+func IsIdentityTokenValid(identityToken string, validFor string) bool {
+	return identityTokenCache.isIdentityTokenValid(identityToken, validFor)
+}
+
+/*
+	*******************************************************************
+		Entity
+	*******************************************************************
+*/
+// Entity describes a user or a device
+type Entity struct {
+	Nick                 string    `json:"nick"`
+	PasswordHash         string    `json:"passwordHash"`
+	SecretHash           string    `json:"secretHash"`
+	Active               bool      `json:"active"`
+	LastSingIn           time.Time `json:"lastSingIn"`
+	WrongPasswordCounter int       `json:"WrongPasswordCounter"`
+	CreateTimeStamp      time.Time `json:"createTimeStamp"`
+	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
 }
 
 /*
@@ -78,119 +80,81 @@ func GetIdentityToken(nick, password, remoteAddr string) (IdentityTokenStruct, e
 		Entity Token Cache
 	*******************************************************************
 */
-var identityTokenCache IdentityTokenCacheType
+var identityTokenCache identityTokenCacheType
 
-// IdentityTokenStruct describes the identity token returned to the client
-type IdentityTokenStruct struct {
+// identityTokenStruct describes the identity token returned to the client
+type identityTokenStruct struct {
 	IdentityToken string    `json:"identityToken"`
 	ValidUntil    time.Time `json:"validUntil"`
 }
 
-// IdentityTokenCacheItemStruct describes on record of the internal list of provided identity tokens
-type IdentityTokenCacheItemStruct struct {
+// identityTokenCacheItemStruct describes on record of the internal list of provided identity tokens
+type identityTokenCacheItemStruct struct {
 	IdentityToken string
-	Nick          string
 	ValidUntil    time.Time
 	ValidFor      string
 }
 
-// IdentityTokenCacheItemSlice describes the internal list of provided identity tokens
-type IdentityTokenCacheItemSlice []IdentityTokenCacheItemStruct
+// identityTokenCacheItemSlice describes the internal list of provided identity tokens
+type identityTokenCacheItemSlice []identityTokenCacheItemStruct
 
-// IdentityTokenCacheType is the actual type of the cache for identity tokens
-type IdentityTokenCacheType struct {
-	Cache IdentityTokenCacheItemSlice
+// identityTokenCacheType is the actual type of the cache for identity tokens
+type identityTokenCacheType struct {
+	Cache identityTokenCacheItemSlice
 }
 
-// Add adds a new token to identity token cache
-func (itc *IdentityTokenCacheType) Add(token IdentityTokenCacheItemStruct) {
-	itc.Cache = append(itc.Cache, token)
-	identityTokenCache.DeleteInvalid()
-}
-
-// DeleteInvalid deletes invalid token from identity token cache
-func (itc IdentityTokenCacheType) DeleteInvalid() {
-
+// add adds a new token to identity token cache
+func (itc *identityTokenCacheType) add(token string, validUntil time.Time, validFor string) {
 	now := time.Now().UTC()
-	emptyToken := IdentityTokenCacheItemStruct{}
+	emptyIdentityToken := identityTokenCacheItemStruct{}
+	newIdentityToken := identityTokenCacheItemStruct{
+		IdentityToken: token,
+		ValidUntil:    validUntil,
+		ValidFor:      validFor,
+	}
+	placed := false
 
-	// remote invalid tokens
-	emptyTokenCount := 0
-	for i, token := range itc.Cache {
+	for i, token := range identityTokenCache.Cache {
+		// invalidate token that ran out of validity (by setting it empty)
+		if token.ValidUntil.Before(now) {
+			identityTokenCache.Cache[i] = emptyIdentityToken
+		}
+		// put new token at first empty position
+		if !placed && token == emptyIdentityToken {
+			identityTokenCache.Cache[i] = newIdentityToken
+			placed = true
+		}
+	}
+
+	if !placed {
+		itc.Cache = append(itc.Cache, newIdentityToken)
+	}
+}
+
+// isIdentityTokenValid checks if an identity token is valid
+func (itc identityTokenCacheType) isIdentityTokenValid(identityToken string, validFor string) bool {
+	now := time.Now().UTC()
+	emptyToken := identityTokenCacheItemStruct{}
+
+	for i, token := range identityTokenCache.Cache {
 		if token == emptyToken {
-			emptyTokenCount++
 			continue
 		}
+		// invalidate token that ran out of validity (by setting it empty)
 		if token.ValidUntil.Before(now) {
-			itc.Cache[i] = emptyToken
-			emptyTokenCount++
+			identityTokenCache.Cache[i] = emptyToken
+			continue
+		}
+		// check identity token
+		if itc.Cache[i].IdentityToken == identityToken {
+			// check if client's address is correct
+			if identityTokenCache.Cache[i].ValidFor == validFor {
+				return true
+			}
 		}
 	}
 
-	// ToDo: reorganize token cache (bring empty tokens to end, reduce capacity, ...)
-}
-
-/*
-	*******************************************************************
-		EntityModel
-	*******************************************************************
-*/
-var entityModel EntityModelInterface
-
-type EntityModelInterface interface {
-	ReadByNick(nick string) (*Entity, error)
-	NickExists(nick string) bool
-	Save(entity *Entity) error
-	LoadConfiguration() (ConfigurationStruct, error)
-}
-
-/*
-	EntityModelMock
-*/
-type EntityModelMock struct{}
-
-func (m EntityModelMock) ReadByNick(nick string) (*Entity, error) {
-	e := Entity{}
-	e.Nick = nick
-	e.PasswordHash = Hash("SeCrEtSeCrEt")
-	return &e, nil
-}
-
-func (m EntityModelMock) NickExists(nick string) bool {
-	if nick == "NICK4201" {
-		return true
-	} else if nick == "NICK4202" {
-		return true
-	} else if nick == "NICK4203" {
-		return true
-	}
 	return false
-}
-
-func (m EntityModelMock) Save(e *Entity) error {
-	return nil
-}
-
-func (m EntityModelMock) LoadConfiguration() (ConfigurationStruct, error) {
-	conf := ConfigurationStruct{
-		Port:                         "8288",
-		DBPath:                       "/db/entity",
-		IdentityTokenValidityMinutes: 12,
-	}
-	return conf, nil
-}
-
-/*
-	*******************************************************************
-		Configuration
-	*******************************************************************
-*/
-var configuration ConfigurationStruct
-
-type ConfigurationStruct struct {
-	Port                         string `json:"port"`
-	DBPath                       string `json:"dbPath"`
-	IdentityTokenValidityMinutes int32  `json:"identityTokenValidityMinutes"`
 }
 
 /*
