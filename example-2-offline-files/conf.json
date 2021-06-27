@@ -1,5 +1,5 @@
 {
     "port": "8242",
-    "dbPath": "C:/Users/janos/Documents/dev/github.com/janso/embiam/example-2-offline-files/db/",
+    "dbPath": "db/",
     "IdentityTokenValiditySeconds": 720
 }
