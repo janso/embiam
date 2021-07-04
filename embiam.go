@@ -13,23 +13,23 @@ import (
 )
 
 // Initialize prepares embiam for usages
-func Initialize(aEntityModel EntityModelInterface) {
+func Initialize(aDb DbInterface) {
 	// initialize randomizer
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	// initialize entity model
-	entityModel = aEntityModel
-	entityModel.Initialize()
+	Db = aDb
+	Db.Initialize()
 
 	// load configuration
 	var err error
-	Configuration, err = entityModel.LoadConfiguration()
+	Configuration, err = Db.LoadConfiguration()
 	if err != nil {
 		log.Fatalln("Error loading configuration")
 	}
 
 	// initialize based on configuration
-	entityModel.InitializeConfiguration()
+	Db.InitializeConfiguration()
 
 	//  initialize the token cache
 	identityTokenCache := identityTokenCacheType{}
@@ -39,7 +39,7 @@ func Initialize(aEntityModel EntityModelInterface) {
 // CheckIdentity checks nick and password and provides and identity token (for the remote address)
 func CheckIdentity(nick, password, remoteAddr string) (identityTokenStruct, error) {
 	identityToken := identityTokenStruct{}
-	entity, err := entityModel.ReadByNick(nick)
+	entity, err := Db.ReadEntityByNick(nick)
 	if err != nil {
 		return identityToken, errors.New("nick not found")
 	}
@@ -57,20 +57,20 @@ func CheckIdentity(nick, password, remoteAddr string) (identityTokenStruct, erro
 			entity.Active = false
 		}
 		entity.LastSignInAttempt = time.Now().UTC()
-		entityModel.Save(entity)
+		Db.SaveEntity(entity)
 		// return error
 		return identityToken, errors.New("invalid password")
 	}
 
 	// create identity token
-	identityToken.IdentityToken = GenerateToken()
+	identityToken.Token = GenerateIdentityToken()
 
 	// set end of validity
 	seconds := Configuration.IdentityTokenValiditySeconds // get number of minutes from config
 	identityToken.ValidUntil = time.Now().UTC().Add(time.Second * time.Duration(seconds))
 
 	// save identity token, validity and remove address in cache
-	identityTokenCache.add(identityToken.IdentityToken, identityToken.ValidUntil, remoteAddr)
+	identityTokenCache.add(identityToken.Token, identityToken.ValidUntil, remoteAddr)
 
 	// return identityToken (with token and valid until)
 	return identityToken, nil
@@ -117,53 +117,95 @@ type Entity struct {
 	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
 }
 
-// Save uses the entity model to save 'e' persistently
-func (e Entity) Save() error {
-	return entityModel.Save(&e)
-}
-
 // NewEntity creates a new entity
-func NewEntity() Entity {
-	// create entity with password and secret
-	e := Entity{
-		Nick:                 "",
-		PasswordHash:         "",
-		SecretHash:           "",
-		Active:               true,
-		LastSignIn:           time.Time{},
-		WrongPasswordCounter: 0,
-		CreateTimeStamp:      time.Now(),
-		UpdateTimeStamp:      time.Time{},
+func NewEntity(entityToken string) (Entity, string, string, error) {
+	// prepare new entity
+	e := Entity{}
+
+	// check entity token
+	et, err := Db.ReadEntityToken(entityToken)
+	if err != nil {
+		return e, "", "", err
 	}
+	if et.ValidUntil.Before(time.Now()) {
+		return e, "", "", errors.New("validity of entity token expired")
+	}
+
+	// create entity with password and secret
+	password := GeneratePassword(16)
+	secret := GeneratePassword(64)
+	e.PasswordHash = Hash(password)
+	e.SecretHash = Hash(secret)
+	e.Active = true
+	e.CreateTimeStamp = time.Now().UTC()
 
 	// generate a unique nick
 	for {
 		e.Nick = GenerateNick()
-		if !entityModel.NickExists(e.Nick) {
+		if !Db.EntityExists(e.Nick) {
 			break
 		}
 	}
-	return e
+
+	// save new entity
+	err = e.Save()
+	if err != nil {
+		return Entity{}, "", "", err
+	}
+
+	// delete entity token
+	err = et.Delete()
+	return e, password, secret, nil
+}
+
+// Save uses the entity model to save 'e' persistently
+func (e Entity) Save() error {
+	return Db.SaveEntity(&e)
 }
 
 /*
 	*******************************************************************
-		Entity Token Cache
+		Entity Token
+	*******************************************************************
+*/
+type EntityToken struct {
+	Token      string
+	ValidUntil time.Time
+}
+
+// NewEntityToken creates a new entity token (token itself and set validity, comming from configuration)
+func NewEntityToken() EntityToken {
+	// set end of validity
+	hours := Configuration.EntityTokenValidityHours // number of hours the entity token is valid
+	validUntil := time.Now().UTC().Add(time.Hour * time.Duration(hours))
+	return EntityToken{
+		Token:      GenerateEntityToken(),
+		ValidUntil: validUntil,
+	}
+}
+
+// Save the entity token to database
+func (et EntityToken) Save() error {
+	return Db.SaveEntityToken(&et)
+}
+
+// Delete the entity token from database
+func (et EntityToken) Delete() error {
+	return Db.DeleteEntityToken(et.Token)
+}
+
+/*
+	*******************************************************************
+		Identity Token Cache
 	*******************************************************************
 */
 var identityTokenCache identityTokenCacheType
 
-// identityTokenStruct describes the identity token returned to the client
-type identityTokenStruct struct {
-	IdentityToken string    `json:"identityToken"`
-	ValidUntil    time.Time `json:"validUntil"`
-}
-
 // identityTokenCacheItemStruct describes on record of the internal list of provided identity tokens
 type identityTokenCacheItemStruct struct {
-	IdentityToken string
-	ValidUntil    time.Time
-	ValidFor      string
+	Token      string
+	ValidUntil time.Time
+	ValidFor   string
 }
 
 // identityTokenCacheItemSlice describes the internal list of provided identity tokens
@@ -174,14 +216,19 @@ type identityTokenCacheType struct {
 	Cache identityTokenCacheItemSlice
 }
 
+type identityTokenStruct struct {
+	Token      string
+	ValidUntil time.Time
+}
+
 // add adds a new token to identity token cache
 func (itc *identityTokenCacheType) add(token string, validUntil time.Time, validFor string) {
 	now := time.Now().UTC()
 	emptyIdentityToken := identityTokenCacheItemStruct{}
 	newIdentityToken := identityTokenCacheItemStruct{
-		IdentityToken: token,
-		ValidUntil:    validUntil,
-		ValidFor:      validFor,
+		Token:      token,
+		ValidUntil: validUntil,
+		ValidFor:   validFor,
 	}
 	placed := false
 
@@ -217,7 +264,7 @@ func (itc identityTokenCacheType) isIdentityTokenValid(identityToken string, val
 			continue
 		}
 		// check identity token
-		if itc.Cache[i].IdentityToken == identityToken {
+		if itc.Cache[i].Token == identityToken {
 			// check if client's address is correct
 			if identityTokenCache.Cache[i].ValidFor == validFor {
 				return true
@@ -235,7 +282,7 @@ func (itc identityTokenCacheType) isIdentityTokenValid(identityToken string, val
 */
 var tokenChars = []byte(`123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz.,-+#(){}[];:_#*!$%&=?|@~`)
 var nickChars = []byte("123456789ABCDEFGHJKLMNPQRSTUVWXYZ")
-var passwordChars = []rune("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz.,-+#")
+var passwordChars = []byte("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz.,-+#")
 
 // Hash calculates 'hash' for 'original' using bcrypt
 func Hash(original string) string {
@@ -246,9 +293,9 @@ func Hash(original string) string {
 	return string(hash)
 }
 
-// GenerateToken generates a token
-func GenerateToken() string {
-	const tokenLength = 16
+// GenerateIdentityToken generates a identity token
+func GenerateIdentityToken() string {
+	const tokenLength = 24
 	password := make([]byte, tokenLength)
 	for i := range password {
 		password[i] = tokenChars[rand.Intn(len(tokenChars))]
@@ -256,7 +303,7 @@ func GenerateToken() string {
 	return string(password)
 }
 
-// GenerateNick generates a valid nick name
+// GenerateNick generates a nick
 func GenerateNick() string {
 	const nickLength = 8
 	nick := make([]byte, nickLength)
@@ -266,11 +313,21 @@ func GenerateNick() string {
 	return string(nick)
 }
 
-// GeneratePassword generates a valid password
+// GeneratePassword generates a password
 func GeneratePassword(length int) string {
-	password := make([]rune, length)
+	password := make([]byte, length)
 	for i := range password {
 		password[i] = passwordChars[rand.Intn(len(passwordChars))]
 	}
 	return string(password)
+}
+
+// GenerateEntityToken generates a valid entity token
+func GenerateEntityToken() string {
+	const tokenLength = 32
+	token := make([]byte, tokenLength)
+	for i := range token {
+		token[i] = nickChars[rand.Intn(len(nickChars))]
+	}
+	return string(token)
 }

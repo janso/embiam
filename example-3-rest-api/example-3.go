@@ -121,7 +121,7 @@ func gettimeHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	// Initiallize (with database in filesystem)
-	embiam.Initialize(new(embiam.EntityModelMock))
+	embiam.Initialize(new(embiam.DbMock))
 
 	// starting server
 	fmt.Printf("Starting Auth Server. Listening on port %s\n", embiam.Configuration.Port)

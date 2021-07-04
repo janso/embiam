@@ -3,77 +3,44 @@ package embiam
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
-	"time"
 )
-
-type Storer interface {
-	Init()
-	List()
-}
-
-type StringStore struct {
-	a []string
-}
-
-func (ss *StringStore) Init() {
-	fmt.Printf("StringStore.Init()\n")
-	ss.a = []string{"Hund", "Katze", "Maus"}
-}
-
-func (ss StringStore) List() {
-	fmt.Printf("StringStore.List()\n")
-	for _, s := range ss.a {
-		fmt.Printf("  %s\n", s)
-	}
-}
 
 /*
 	*******************************************************************
-		EntityModel
+		Model
 	*******************************************************************
 */
-var entityModel EntityModelInterface
+var Db DbInterface
 
-type EntityModelInterface interface {
+type DbInterface interface {
 	Initialize()
 	LoadConfiguration() (ConfigurationStruct, error)
 	InitializeConfiguration()
-	ReadByNick(nick string) (*Entity, error)
-	NickExists(nick string) bool
-	Save(entity *Entity) error
+	ReadEntityByNick(nick string) (*Entity, error)
+	EntityExists(nick string) bool
+	SaveEntity(entity *Entity) error
+	SaveEntityToken(entityToken *EntityToken) error
+	ReadEntityToken(tokenoken string) (*EntityToken, error)
+	DeleteEntityToken(token string) error
 }
 
 /*
-	EntityModelMock
+	DbMock
 */
-type EntityModelMock struct {
-	entityStore map[string]Entity
+type DbMock struct {
+	entityStore      map[string]Entity
+	entityTokenStore map[string]EntityToken
 }
 
-func (m *EntityModelMock) Initialize() {
+func (m *DbMock) Initialize() {
 	m.entityStore = make(map[string]Entity, 32)
-	// insert dummy entities
-	for i := 1; i < 4; i++ {
-		e := Entity{
-			Nick:                 fmt.Sprintf("NICK%04d", i),
-			PasswordHash:         Hash("SeCrEtSeCrEt"),
-			SecretHash:           "",
-			Active:               true,
-			LastSignIn:           time.Time{},
-			WrongPasswordCounter: 0,
-			CreateTimeStamp:      time.Now().UTC(),
-			UpdateTimeStamp:      time.Time{},
-		}
-		m.Save(&e)
-	}
 }
 
-func (m EntityModelMock) LoadConfiguration() (ConfigurationStruct, error) {
+func (m DbMock) LoadConfiguration() (ConfigurationStruct, error) {
 	conf := ConfigurationStruct{
 		Port:                         "8242",
 		DBPath:                       "",
@@ -83,37 +50,58 @@ func (m EntityModelMock) LoadConfiguration() (ConfigurationStruct, error) {
 	return conf, nil
 }
 
-func (m *EntityModelMock) InitializeConfiguration() {
+func (m *DbMock) InitializeConfiguration() {
 }
 
-func (m EntityModelMock) ReadByNick(nick string) (*Entity, error) {
+func (m DbMock) ReadEntityByNick(nick string) (*Entity, error) {
 	e, found := m.entityStore[nick]
 	if found {
 		return &e, nil
 	}
-	return nil, errors.New("nick not found")
+	return nil, errors.New("entity not found")
 }
 
-func (m EntityModelMock) NickExists(nick string) bool {
+func (m DbMock) EntityExists(nick string) bool {
 	_, found := m.entityStore[nick]
 	return found
 }
 
-func (m EntityModelMock) Save(e *Entity) error {
+func (m DbMock) SaveEntity(e *Entity) error {
 	m.entityStore[e.Nick] = *e
 	return nil
 }
 
-/*
-	EntityModelFileDB
-*/
-
-type EntityModelFileDB struct{}
-
-func (m *EntityModelFileDB) Initialize() {
+func (m DbMock) SaveEntityToken(et *EntityToken) error {
+	m.entityTokenStore[et.Token] = *et
+	return nil
 }
 
-func (m EntityModelFileDB) LoadConfiguration() (ConfigurationStruct, error) {
+func (m DbMock) ReadEntityToken(token string) (*EntityToken, error) {
+	et, found := m.entityTokenStore[token]
+	if found {
+		return &et, nil
+	}
+	return nil, errors.New("entity token not found")
+}
+
+func (m DbMock) DeleteEntityToken(token string) error {
+	delete(m.entityTokenStore, token)
+	return nil
+}
+
+/*
+	DbFile
+*/
+
+const EntityFilePath = `entity/`
+const EntityTokenFilePath = `entityToken/`
+
+type DbFile struct{}
+
+func (m *DbFile) Initialize() {
+}
+
+func (m DbFile) LoadConfiguration() (ConfigurationStruct, error) {
 	const ConfigurationFileName = "conf.json"
 
 	// set defaults
@@ -162,24 +150,23 @@ func (m EntityModelFileDB) LoadConfiguration() (ConfigurationStruct, error) {
 	return conf, nil // ToDo: return pointer to increase efficiency (does it really increase efficiency?)
 }
 
-func (m *EntityModelFileDB) InitializeConfiguration() {
+func (m *DbFile) InitializeConfiguration() {
 	// create directories in db/
-	folderPath := Configuration.DBPath + `nick/`
+	folderPath := Configuration.DBPath + EntityFilePath
 	err := os.MkdirAll(folderPath, os.ModePerm)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	folderPath = Configuration.DBPath + `newNickToken/`
+	folderPath = Configuration.DBPath + EntityTokenFilePath
 	err = os.MkdirAll(folderPath, os.ModePerm)
 	if err != nil {
 		log.Fatalln(err)
 	}
-
 }
 
-func (m EntityModelFileDB) ReadByNick(nick string) (*Entity, error) {
-	filepath := Configuration.DBPath + `nick/` + nick
-	jsonString, err := ioutil.ReadFile((filepath))
+func (m DbFile) ReadEntityByNick(nick string) (*Entity, error) {
+	filepath := Configuration.DBPath + EntityFilePath + nick
+	jsonString, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		return nil, err
 	}
@@ -191,19 +178,55 @@ func (m EntityModelFileDB) ReadByNick(nick string) (*Entity, error) {
 	return &entity, nil
 }
 
-func (m EntityModelFileDB) NickExists(nick string) bool {
-	filepath := Configuration.DBPath + `nick/` + nick
+func (m DbFile) EntityExists(nick string) bool {
+	filepath := Configuration.DBPath + EntityFilePath + nick
 	_, err := os.Stat(filepath)
 	return err == nil
 }
 
-func (m EntityModelFileDB) Save(e *Entity) error {
-	filepath := Configuration.DBPath + `nick/` + e.Nick
+func (m DbFile) SaveEntity(e *Entity) error {
+	filepath := Configuration.DBPath + EntityFilePath + e.Nick
 	jsonbytes, err := json.MarshalIndent(e, "", "\t")
 	if err != nil {
 		return err
 	}
 	err = ioutil.WriteFile(filepath, jsonbytes, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m DbFile) SaveEntityToken(et *EntityToken) error {
+	filepath := Configuration.DBPath + EntityTokenFilePath + et.Token
+	jsonbytes, err := json.MarshalIndent(et, "", "\t")
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(filepath, jsonbytes, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m DbFile) ReadEntityToken(token string) (*EntityToken, error) {
+	filepath := Configuration.DBPath + EntityTokenFilePath + token
+	jsonString, err := ioutil.ReadFile(filepath)
+	if err != nil {
+		return nil, errors.New("entity token not found " + token)
+	}
+	et := EntityToken{}
+	err = json.Unmarshal([]byte(jsonString), &et)
+	if err != nil {
+		return nil, err
+	}
+	return &et, nil
+}
+
+func (m DbFile) DeleteEntityToken(token string) error {
+	filepath := Configuration.DBPath + EntityTokenFilePath + token
+	err := os.Remove(filepath)
 	if err != nil {
 		return err
 	}
@@ -220,6 +243,7 @@ var Configuration ConfigurationStruct
 type ConfigurationStruct struct {
 	Port                         string `json:"port"`
 	DBPath                       string `json:"dbPath"`
+	EntityTokenValidityHours     int    `json:"entityTokenValidityHours"`
 	IdentityTokenValiditySeconds int    `json:"identityTokenValiditySeconds"`
 	MaxSignInAttempts            int    `json:"maxSignInAttempts"`
 }

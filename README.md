@@ -21,3 +21,11 @@ After the authentication (with nick and password) the client application gets an
 	}
 see example 3 
 
+-- Creating new nicks
+We call it nick instead of user because a nick describes also a machine, not only person. 
+Nicks are generated and can't be choosen. So is the password. The procedure to provide a new identity, a new nick is as follows
+	1. A nick token is generated. The nick token is valid for a certain time (e.g. 3 days). Usually the admin generates the token and sends it to the new user.
+	   embiam.GetNickToken() nickToken
+
+	2. The new user receives the nick token and uses it to get a new nick, a new password and a secret (to restore passwords). At the same time embiam saves the new nick in db (for password and secret embiam only stores hashes). The nick token is deleted.
+	   embiam.GenerateNewNick(nickToken) newNick
