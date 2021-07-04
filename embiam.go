@@ -1,9 +1,12 @@
 package embiam
 
+// ToDo: localization https://phrase.com/blog/posts/internationalization-i18n-go/
+
 import (
 	"errors"
 	"log"
 	"math/rand"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -11,39 +14,56 @@ import (
 
 // Initialize prepares embiam for usages
 func Initialize(aEntityModel EntityModelInterface) {
-	// set model (to access persistency)
-	entityModel = aEntityModel
+	// initialize randomizer
+	rand.Seed(time.Now().UTC().UnixNano())
 
-	// read configuration
+	// initialize entity model
+	entityModel = aEntityModel
+	entityModel.Initialize()
+
+	// load configuration
 	var err error
 	Configuration, err = entityModel.LoadConfiguration()
 	if err != nil {
 		log.Fatalln("Error loading configuration")
 	}
 
+	// initialize based on configuration
+	entityModel.InitializeConfiguration()
+
 	//  initialize the token cache
 	identityTokenCache := identityTokenCacheType{}
 	identityTokenCache.Cache = make(identityTokenCacheItemSlice, 0, 1024)
-
-	// initialize randomizer
-	rand.Seed(time.Now().UTC().UnixNano())
 }
 
-// GetIdentityToken checks nick and password and provides and identity token (for the remote address)
-func GetIdentityToken(nick, password, remoteAddr string) (identityTokenStruct, error) {
+// CheckIdentity checks nick and password and provides and identity token (for the remote address)
+func CheckIdentity(nick, password, remoteAddr string) (identityTokenStruct, error) {
 	identityToken := identityTokenStruct{}
 	entity, err := entityModel.ReadByNick(nick)
 	if err != nil {
 		return identityToken, errors.New("nick not found")
 	}
+	// check if entity is active
+	if !entity.Active {
+		return identityToken, errors.New("entity is not active")
+	}
 	// compare given password with saved hash of password
 	err = bcrypt.CompareHashAndPassword([]byte(entity.PasswordHash), []byte(password))
 	if err != nil {
+		// wrong password
+		entity.WrongPasswordCounter++
+		if entity.WrongPasswordCounter > Configuration.MaxSignInAttempts {
+			// deactivate entity because of multiple wrong attempts
+			entity.Active = false
+		}
+		entity.LastSignInAttempt = time.Now().UTC()
+		entityModel.Save(entity)
+		// return error
 		return identityToken, errors.New("invalid password")
 	}
 
 	// create identity token
-	identityToken.IdentityToken = GenerateToken(16)
+	identityToken.IdentityToken = GenerateToken()
 
 	// set end of validity
 	seconds := Configuration.IdentityTokenValiditySeconds // get number of minutes from config
@@ -56,7 +76,25 @@ func GetIdentityToken(nick, password, remoteAddr string) (identityTokenStruct, e
 	return identityToken, nil
 }
 
-// IsIdentityTokenValid check if the identity token is valid for validUntil and validFor
+// IsAuthValueValid checks if the identity token is valid, validFor contains information about the client, e.g. the IP address
+func IsAuthValueValid(authValue string, validFor string) bool {
+	/*
+		authValue is transfered in the http header in field "Authorization"
+		and it is determined by r.Header.Get("Authorization")
+		it's value consists of the term embiam an the actual identity token,
+		e.g. emibiam AvErYSeCuReIdEnTiTyToKeN
+	*/
+	authPart := strings.Split(authValue, " ")
+	if len(authPart) < 2 {
+		return false
+	}
+	if authPart[0] != "embiam" {
+		return false
+	}
+	return identityTokenCache.isIdentityTokenValid(authPart[1], validFor)
+}
+
+// IsIdentityTokenValid checks if the identity token is valid, validFor contains information about the client, e.g. the IP address
 func IsIdentityTokenValid(identityToken string, validFor string) bool {
 	return identityTokenCache.isIdentityTokenValid(identityToken, validFor)
 }
@@ -72,8 +110,9 @@ type Entity struct {
 	PasswordHash         string    `json:"passwordHash"`
 	SecretHash           string    `json:"secretHash"`
 	Active               bool      `json:"active"`
-	LastSingIn           time.Time `json:"lastSingIn"`
 	WrongPasswordCounter int       `json:"WrongPasswordCounter"`
+	LastSignInAttempt    time.Time `json:"lastSignInAttempt"`
+	LastSignIn           time.Time `json:"lastSignIn"`
 	CreateTimeStamp      time.Time `json:"createTimeStamp"`
 	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
 }
@@ -90,8 +129,8 @@ func NewEntity() Entity {
 		Nick:                 "",
 		PasswordHash:         "",
 		SecretHash:           "",
-		Active:               false,
-		LastSingIn:           time.Time{},
+		Active:               true,
+		LastSignIn:           time.Time{},
 		WrongPasswordCounter: 0,
 		CreateTimeStamp:      time.Now(),
 		UpdateTimeStamp:      time.Time{},
@@ -194,6 +233,9 @@ func (itc identityTokenCacheType) isIdentityTokenValid(identityToken string, val
 		Crypto functions
 	*******************************************************************
 */
+var tokenChars = []byte(`123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz.,-+#(){}[];:_#*!$%&=?|@~`)
+var nickChars = []byte("123456789ABCDEFGHJKLMNPQRSTUVWXYZ")
+var passwordChars = []rune("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz.,-+#")
 
 // Hash calculates 'hash' for 'original' using bcrypt
 func Hash(original string) string {
@@ -205,31 +247,30 @@ func Hash(original string) string {
 }
 
 // GenerateToken generates a token
-func GenerateToken(length int) string {
-	chars := []rune(`123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz.,-+#<>(){}[];:_#*/\!§$%&=?|@€~`)
-	password := make([]rune, length)
+func GenerateToken() string {
+	const tokenLength = 16
+	password := make([]byte, tokenLength)
 	for i := range password {
-		password[i] = chars[rand.Intn(len(chars))]
+		password[i] = tokenChars[rand.Intn(len(tokenChars))]
 	}
 	return string(password)
 }
 
 // GenerateNick generates a valid nick name
 func GenerateNick() string {
-	chars := []rune("123456789ABCDEFGHJKLMNPQRSTUVWXYZ")
-	nick := make([]rune, 8)
+	const nickLength = 8
+	nick := make([]byte, nickLength)
 	for i := range nick {
-		nick[i] = chars[rand.Intn(len(chars))]
+		nick[i] = nickChars[rand.Intn(len(nickChars))]
 	}
 	return string(nick)
 }
 
 // GeneratePassword generates a valid password
 func GeneratePassword(length int) string {
-	chars := []rune("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz.,-+#")
 	password := make([]rune, length)
 	for i := range password {
-		password[i] = chars[rand.Intn(len(chars))]
+		password[i] = passwordChars[rand.Intn(len(passwordChars))]
 	}
 	return string(password)
 }

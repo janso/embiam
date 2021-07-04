@@ -2,11 +2,35 @@ package embiam
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 )
+
+type Storer interface {
+	Init()
+	List()
+}
+
+type StringStore struct {
+	a []string
+}
+
+func (ss *StringStore) Init() {
+	fmt.Printf("StringStore.Init()\n")
+	ss.a = []string{"Hund", "Katze", "Maus"}
+}
+
+func (ss StringStore) List() {
+	fmt.Printf("StringStore.List()\n")
+	for _, s := range ss.a {
+		fmt.Printf("  %s\n", s)
+	}
+}
 
 /*
 	*******************************************************************
@@ -16,7 +40,9 @@ import (
 var entityModel EntityModelInterface
 
 type EntityModelInterface interface {
+	Initialize()
 	LoadConfiguration() (ConfigurationStruct, error)
+	InitializeConfiguration()
 	ReadByNick(nick string) (*Entity, error)
 	NickExists(nick string) bool
 	Save(entity *Entity) error
@@ -25,43 +51,67 @@ type EntityModelInterface interface {
 /*
 	EntityModelMock
 */
-type EntityModelMock struct{}
+type EntityModelMock struct {
+	entityStore map[string]Entity
+}
+
+func (m *EntityModelMock) Initialize() {
+	m.entityStore = make(map[string]Entity, 32)
+	// insert dummy entities
+	for i := 1; i < 4; i++ {
+		e := Entity{
+			Nick:                 fmt.Sprintf("NICK%04d", i),
+			PasswordHash:         Hash("SeCrEtSeCrEt"),
+			SecretHash:           "",
+			Active:               true,
+			LastSignIn:           time.Time{},
+			WrongPasswordCounter: 0,
+			CreateTimeStamp:      time.Now().UTC(),
+			UpdateTimeStamp:      time.Time{},
+		}
+		m.Save(&e)
+	}
+}
 
 func (m EntityModelMock) LoadConfiguration() (ConfigurationStruct, error) {
 	conf := ConfigurationStruct{
-		Port:                         "8288",
-		DBPath:                       "db/",
+		Port:                         "8242",
+		DBPath:                       "",
 		IdentityTokenValiditySeconds: 720,
+		MaxSignInAttempts:            3,
 	}
 	return conf, nil
 }
 
+func (m *EntityModelMock) InitializeConfiguration() {
+}
+
 func (m EntityModelMock) ReadByNick(nick string) (*Entity, error) {
-	e := Entity{}
-	e.Nick = nick
-	e.PasswordHash = Hash("SeCrEtSeCrEt")
-	return &e, nil
+	e, found := m.entityStore[nick]
+	if found {
+		return &e, nil
+	}
+	return nil, errors.New("nick not found")
 }
 
 func (m EntityModelMock) NickExists(nick string) bool {
-	if nick == "NICK4201" {
-		return true
-	} else if nick == "NICK4202" {
-		return true
-	} else if nick == "NICK4203" {
-		return true
-	}
-	return false
+	_, found := m.entityStore[nick]
+	return found
 }
 
 func (m EntityModelMock) Save(e *Entity) error {
+	m.entityStore[e.Nick] = *e
 	return nil
 }
 
 /*
 	EntityModelFileDB
 */
+
 type EntityModelFileDB struct{}
+
+func (m *EntityModelFileDB) Initialize() {
+}
 
 func (m EntityModelFileDB) LoadConfiguration() (ConfigurationStruct, error) {
 	const ConfigurationFileName = "conf.json"
@@ -71,6 +121,7 @@ func (m EntityModelFileDB) LoadConfiguration() (ConfigurationStruct, error) {
 		Port:                         "8242",
 		DBPath:                       "db/",
 		IdentityTokenValiditySeconds: 720,
+		MaxSignInAttempts:            3,
 	}
 
 	// get directory of executable as basis for relativ paths
@@ -111,8 +162,23 @@ func (m EntityModelFileDB) LoadConfiguration() (ConfigurationStruct, error) {
 	return conf, nil // ToDo: return pointer to increase efficiency (does it really increase efficiency?)
 }
 
+func (m *EntityModelFileDB) InitializeConfiguration() {
+	// create directories in db/
+	folderPath := Configuration.DBPath + `nick/`
+	err := os.MkdirAll(folderPath, os.ModePerm)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	folderPath = Configuration.DBPath + `newNickToken/`
+	err = os.MkdirAll(folderPath, os.ModePerm)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+}
+
 func (m EntityModelFileDB) ReadByNick(nick string) (*Entity, error) {
-	filepath := Configuration.DBPath + nick
+	filepath := Configuration.DBPath + `nick/` + nick
 	jsonString, err := ioutil.ReadFile((filepath))
 	if err != nil {
 		return nil, err
@@ -126,13 +192,13 @@ func (m EntityModelFileDB) ReadByNick(nick string) (*Entity, error) {
 }
 
 func (m EntityModelFileDB) NickExists(nick string) bool {
-	filepath := Configuration.DBPath + nick
+	filepath := Configuration.DBPath + `nick/` + nick
 	_, err := os.Stat(filepath)
 	return err == nil
 }
 
 func (m EntityModelFileDB) Save(e *Entity) error {
-	filepath := Configuration.DBPath + e.Nick
+	filepath := Configuration.DBPath + `nick/` + e.Nick
 	jsonbytes, err := json.MarshalIndent(e, "", "\t")
 	if err != nil {
 		return err
@@ -154,5 +220,6 @@ var Configuration ConfigurationStruct
 type ConfigurationStruct struct {
 	Port                         string `json:"port"`
 	DBPath                       string `json:"dbPath"`
-	IdentityTokenValiditySeconds int32  `json:"identityTokenValiditySeconds"`
+	IdentityTokenValiditySeconds int    `json:"identityTokenValiditySeconds"`
+	MaxSignInAttempts            int    `json:"maxSignInAttempts"`
 }

@@ -9,31 +9,12 @@ import (
 	"github.com/janso/embiam"
 )
 
-func removeContents(dir string) error {
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	names, err := d.Readdirnames(-1)
-	if err != nil {
-		return err
-	}
-	for _, name := range names {
-		err = os.RemoveAll(filepath.Join(dir, name))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func main() {
-	// Initiallize (with database in filesystem)
-	embiam.Initialize(embiam.EntityModelFileDB{})
+	// Initiallize (using filesystem as database)
+	embiam.Initialize(new(embiam.EntityModelFileDB))
 
-	// generate some entitys to use for authentication
-	removeContents(embiam.Configuration.DBPath)
+	// generate some entities (users) folder ./db/nick/
+	removeContents(embiam.Configuration.DBPath + `nick/`)
 	entity := embiam.Entity{}
 	password := ""
 	secret := ""
@@ -53,19 +34,38 @@ func main() {
 	}
 
 	// Use nick and password to authentify
-	// get an identity token to use later (without credentials)
-	identityToken, err := embiam.GetIdentityToken(entity.Nick, password, "localhost")
+	identityToken, err := embiam.CheckIdentity(entity.Nick, password, "localhost")
 	if err != nil {
 		log.Fatalln(err)
 	}
 	fmt.Printf("Identity of %s was validated. The identity token %s was provided\n\n", entity.Nick, identityToken)
+	// receive an identity token to use later (without credentials)
 
 	// With the provided identity token, the user can e.g. call APIs
-	// When an API is called, the client passes the identity token back to the server
-	// The server checks the identity token quickly
+	// When an API is called, the client passes the identity token  to the server.
+	// The server checks the identity token
 	if embiam.IsIdentityTokenValid(identityToken.IdentityToken, "localhost") {
 		fmt.Printf("Identity token is valid.")
 	} else {
 		log.Fatalln(err)
 	}
+}
+
+func removeContents(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		err = os.RemoveAll(filepath.Join(dir, name))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
