@@ -11,7 +11,7 @@ import (
 
 /*
 	*******************************************************************
-		Model
+		Database (persistent storage)
 	*******************************************************************
 */
 var Db DbInterface
@@ -29,7 +29,7 @@ type DbInterface interface {
 }
 
 /*
-	DbMock
+	DbMock - non-persistent Db for testing and demonstration
 */
 type DbMock struct {
 	entityStore      map[string]Entity
@@ -90,7 +90,7 @@ func (m DbMock) DeleteEntityToken(token string) error {
 }
 
 /*
-	DbFile
+	DbFile - simple persistence use the filesystem and store json text files
 */
 
 const EntityFilePath = `entity/`

@@ -13,7 +13,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Initialize prepares embiam for usages
+// Initialize prepares embiam
 func Initialize(aDb DbInterface) {
 	// initialize randomizer
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -35,6 +35,35 @@ func Initialize(aDb DbInterface) {
 	//  initialize the token cache
 	identityTokenCache := identityTokenCacheType{}
 	identityTokenCache.Cache = make(identityTokenCacheItemSlice, 0, 1024)
+}
+
+// CheckAuthIdentity checks nick and password and provides and identity token (for the remote address)
+func CheckAuthIdentity(authValue string, validFor string) (identityTokenStruct, error) {
+	/*
+		authValue is transfered in the http header in field "Authorization"
+		and it is determined by r.Header.Get("Authorization")
+		it's value consists of the term embiam an the nick and password,
+		separated by colon and base64-encoded. Like in simple authentication
+	*/
+	authPart := strings.Split(authValue, " ")
+	if len(authPart) < 2 {
+		return identityTokenStruct{}, errors.New("invalid authorization")
+	}
+	if authPart[0] != "embiam" {
+		return identityTokenStruct{}, errors.New("invalid authorization")
+	}
+	// base64 decode
+	decodedCredentials, err := base64.StdEncoding.DecodeString(authPart[1])
+	if err != nil {
+		return identityTokenStruct{}, errors.New("invalid authorization")
+	}
+	// split username and password
+	nickpass := strings.Split(string(decodedCredentials), ":")
+	if len(nickpass) < 2 {
+		return identityTokenStruct{}, errors.New("invalid authorization")
+	}
+	// do actual check
+	return CheckIdentity(nickpass[0], nickpass[1], validFor)
 }
 
 // CheckIdentity checks nick and password and provides and identity token (for the remote address)
@@ -75,35 +104,6 @@ func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error)
 
 	// return identityToken (with token and valid until)
 	return identityToken, nil
-}
-
-// CheckAuthIdentity checks nick and password and provides and identity token (for the remote address)
-func CheckAuthIdentity(authValue string, validFor string) (identityTokenStruct, error) {
-	/*
-		authValue is transfered in the http header in field "Authorization"
-		and it is determined by r.Header.Get("Authorization")
-		it's value consists of the term embiam an the nick and password,
-		separated by colon and base64-encoded. Like in simple authentication
-	*/
-	authPart := strings.Split(authValue, " ")
-	if len(authPart) < 2 {
-		return identityTokenStruct{}, errors.New("invalid authorization")
-	}
-	if authPart[0] != "embiam" {
-		return identityTokenStruct{}, errors.New("invalid authorization")
-	}
-	// base64 decode
-	decodedCredentials, err := base64.StdEncoding.DecodeString(authPart[1])
-	if err != nil {
-		return identityTokenStruct{}, errors.New("invalid authorization")
-	}
-	// split username and password
-	nickpass := strings.Split(string(decodedCredentials), ":")
-	if len(nickpass) < 2 {
-		return identityTokenStruct{}, errors.New("invalid authorization")
-	}
-	// do actual check
-	return CheckIdentity(nickpass[0], nickpass[1], validFor)
 }
 
 // IsAuthIdentityTokenValid checks if the identity token is valid, validFor contains information about the client, e.g. the IP address
