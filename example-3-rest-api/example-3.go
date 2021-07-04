@@ -5,19 +5,26 @@ The programm is a simple REST server and handles two request:
 
 Test with CURL
 1. Verify identity of nick and password and receive identity token (POST /api/embiam/getToken)
+	This example runs with a mock entity that has the nick NICK0001. It uses the password SeCrEtSeCrEt.
+	Nick and password are concatenated to NICK0001:SeCrEtSeCrEt Both terms are separated by a colon.
+	The result is base64-encoded, and leads to the credentials TklDSzAwMDE6U2VDckV0U2VDckV0.
 
-	$ curl -i -d '{"nick":"NICK0001","password":"SeCrEtSeCrEt"}' http://localhost:8242/api/embiam/getToken
+	make a HTTP GET request to http://localhost:8242/api/embiam/identityToken and
+	use the head field "Authorization: embiam TklDSzAwMDE6U2VDckV0U2VDckV0"
+
+	$ curl -i -H "Authorization: embiam TklDSzAwMDE6U2VDckV0U2VDckV0" http://localhost:8242/api/embiam/identityToken
+
+	you receive
+	HTTP/1.1 200 OK
+	...
+	{"identityToken":"the-acutal-identity-token","validUntil":"YYYY-MM-DDThh:mm:ss.mmmmmmZ"}
+
+2. use identity token the-acutal-identity-token when calling an API, api/gettime in this example
+	$ curl -i -H "Authorization: embiam the-acutal-identity-token" http://localhost:8242/api/gettime
 
 	HTTP/1.1 200 OK
 	...
-	{"identityToken":"16dig-rand-token","validUntil":"YYYY-MM-DDThh:mm:ss.mmmmmmZ"}
-
-2. use identity token when calling an api
-	$ curl -i -H "Authorization: embiam 16dig-rand-token" http://localhost:8242/api/gettime
-
-	HTTP/1.1 200 OK
-	...
-	current time :-)
+	server time
 
 */
 package main
@@ -33,9 +40,9 @@ import (
 	"github.com/janso/embiam"
 )
 
-// embiamCheckIdentityHandler checks the identity for nich and password and provides an identity token
+// embiamidentityTokenGetHandler checks the identity for nick and password and provides an identity token
 // this is required for a call on an API, see gettimeHandler
-func embiamCheckIdentityHandler(w http.ResponseWriter, r *http.Request) {
+func embiamidentityTokenGetHandler(w http.ResponseWriter, r *http.Request) {
 	// Log
 	fmt.Printf("Request received from %s\t on %s\t %s\n", r.RemoteAddr, r.URL.Path, r.Method)
 
@@ -44,39 +51,33 @@ func embiamCheckIdentityHandler(w http.ResponseWriter, r *http.Request) {
 	// w.Header().Set("Access-Control-Allow-Headers", "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers")
 	w.Header().Set("Content-Type", "application/json")
 
-	// handle only POST method
-	if r.Method != http.MethodPost {
+	// handle only GET method
+	if r.Method != http.MethodGet {
 		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// extract client host from r.RemoteAddr
-	clientHost, _, err := net.SplitHostPort(r.RemoteAddr)
+	validFor, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
 
-	// get credentials from boby of post request
-	type credentialType struct {
-		Nick     string `json:"nick"`
-		Password string `json:"password"`
-	}
-	credentials := credentialType{}
-	err = json.NewDecoder(r.Body).Decode(&credentials)
-	if err != nil {
-		http.Error(w, "", http.StatusBadRequest)
-		return
-	}
+	// get credentails from header
+	authValue := r.Header.Get("Authorization")
 
-	// check identity with nick and password
-	// the generated identity token will be connected to clientHost to improve security
-	identityToken, err := embiam.CheckIdentity(credentials.Nick, credentials.Password, clientHost)
+	// check identity with authValue. It contaim the prefix 'embiam' a space and nick and password
+	// nick and password are concatenant with a colon seperating both. The result is base64 encoded
+	// like in simple authentication. e.g. 'embiam REhXUEhTVUw6ZFRjaHguNy15aC5CREVjNw=='
+	// the generated identity token will be connected to validFor to improve security
+	identityToken, err := embiam.CheckAuthIdentity(authValue, validFor)
 	if err != nil {
 		http.Error(w, "", http.StatusForbidden)
 		return
 	}
 	// no error, successfully identified
+	fmt.Printf("\tIdentity verfied and identity token %s provided\n\n", identityToken.Token)
 
 	// send identity token back
 	w.WriteHeader(http.StatusOK)
@@ -98,10 +99,11 @@ func gettimeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get identity token from header
 	authValue := r.Header.Get("Authorization")
-	if !embiam.IsAuthValueValid(authValue, clientHost) {
+	if !embiam.IsAuthIdentityTokenValid(authValue, clientHost) {
 		http.Error(w, "", http.StatusForbidden)
 		return
 	}
+	fmt.Printf("\tAuthorization check successful. Identity token is valid.\n\n")
 
 	// w.Header().Set("Access-Control-Allow-Origin", "*")
 	// w.Header().Set("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS,POST,PUT")
@@ -122,10 +124,11 @@ func gettimeHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// Initiallize (with database in filesystem)
 	embiam.Initialize(new(embiam.DbMock))
+	embiam.GenerateAndSaveMockEntity(`NICK0001`, `SeCrEtSeCrEt`, `SeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEt`)
 
 	// starting server
 	fmt.Printf("Starting Auth Server. Listening on port %s\n", embiam.Configuration.Port)
-	http.HandleFunc("/api/embiam/getToken", embiamCheckIdentityHandler)
+	http.HandleFunc("/api/embiam/identityToken", embiamidentityTokenGetHandler)
 	http.HandleFunc("/api/gettime", gettimeHandler)
 	log.Fatal(http.ListenAndServe(":"+embiam.Configuration.Port, nil))
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/janso/embiam"
 )
@@ -16,7 +15,10 @@ func main() {
 	// see https://jordanorelli.com/post/32665860244/how-to-use-interfaces-in-go
 
 	// Generate test entities
-	GenerateEntities()
+	for i := 1; i < 4; i++ {
+		nick := fmt.Sprintf("NICK%04d", i)
+		embiam.GenerateAndSaveMockEntity(nick, `SeCrEtSeCrEt`, `SeCrEtSeCrEtSeCrEtSeCrEt`)
+	}
 
 	// Use nick and password to get an identity token (for the client's ip address)
 	// this step is done, after the user has entered his credentials
@@ -46,25 +48,4 @@ func main() {
 		log.Fatalln("must not return identityToken")
 	}
 
-}
-
-// Generate test entities
-func GenerateEntities() error {
-	for i := 1; i < 4; i++ {
-		e := embiam.Entity{
-			Nick:                 fmt.Sprintf("NICK%04d", i),
-			PasswordHash:         embiam.Hash("SeCrEtSeCrEt"),
-			SecretHash:           "",
-			Active:               true,
-			LastSignIn:           time.Time{},
-			WrongPasswordCounter: 0,
-			CreateTimeStamp:      time.Now().UTC(),
-			UpdateTimeStamp:      time.Time{},
-		}
-		err := embiam.Db.SaveEntity(&e)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }

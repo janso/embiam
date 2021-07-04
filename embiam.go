@@ -3,6 +3,7 @@ package embiam
 // ToDo: localization https://phrase.com/blog/posts/internationalization-i18n-go/
 
 import (
+	"encoding/base64"
 	"errors"
 	"log"
 	"math/rand"
@@ -37,7 +38,7 @@ func Initialize(aDb DbInterface) {
 }
 
 // CheckIdentity checks nick and password and provides and identity token (for the remote address)
-func CheckIdentity(nick, password, remoteAddr string) (identityTokenStruct, error) {
+func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error) {
 	identityToken := identityTokenStruct{}
 	entity, err := Db.ReadEntityByNick(nick)
 	if err != nil {
@@ -70,14 +71,43 @@ func CheckIdentity(nick, password, remoteAddr string) (identityTokenStruct, erro
 	identityToken.ValidUntil = time.Now().UTC().Add(time.Second * time.Duration(seconds))
 
 	// save identity token, validity and remove address in cache
-	identityTokenCache.add(identityToken.Token, identityToken.ValidUntil, remoteAddr)
+	identityTokenCache.add(identityToken.Token, identityToken.ValidUntil, validFor)
 
 	// return identityToken (with token and valid until)
 	return identityToken, nil
 }
 
-// IsAuthValueValid checks if the identity token is valid, validFor contains information about the client, e.g. the IP address
-func IsAuthValueValid(authValue string, validFor string) bool {
+// CheckAuthIdentity checks nick and password and provides and identity token (for the remote address)
+func CheckAuthIdentity(authValue string, validFor string) (identityTokenStruct, error) {
+	/*
+		authValue is transfered in the http header in field "Authorization"
+		and it is determined by r.Header.Get("Authorization")
+		it's value consists of the term embiam an the nick and password,
+		separated by colon and base64-encoded. Like in simple authentication
+	*/
+	authPart := strings.Split(authValue, " ")
+	if len(authPart) < 2 {
+		return identityTokenStruct{}, errors.New("invalid authorization")
+	}
+	if authPart[0] != "embiam" {
+		return identityTokenStruct{}, errors.New("invalid authorization")
+	}
+	// base64 decode
+	decodedCredentials, err := base64.StdEncoding.DecodeString(authPart[1])
+	if err != nil {
+		return identityTokenStruct{}, errors.New("invalid authorization")
+	}
+	// split username and password
+	nickpass := strings.Split(string(decodedCredentials), ":")
+	if len(nickpass) < 2 {
+		return identityTokenStruct{}, errors.New("invalid authorization")
+	}
+	// do actual check
+	return CheckIdentity(nickpass[0], nickpass[1], validFor)
+}
+
+// IsAuthIdentityTokenValid checks if the identity token is valid, validFor contains information about the client, e.g. the IP address
+func IsAuthIdentityTokenValid(authValue string, validFor string) bool {
 	/*
 		authValue is transfered in the http header in field "Authorization"
 		and it is determined by r.Header.Get("Authorization")
@@ -97,6 +127,26 @@ func IsAuthValueValid(authValue string, validFor string) bool {
 // IsIdentityTokenValid checks if the identity token is valid, validFor contains information about the client, e.g. the IP address
 func IsIdentityTokenValid(identityToken string, validFor string) bool {
 	return identityTokenCache.isIdentityTokenValid(identityToken, validFor)
+}
+
+func GenerateAndSaveMockEntity(nick, password, secret string) {
+	// create entity with password and secret
+	e := Entity{
+		Nick:                 nick,
+		PasswordHash:         Hash(password),
+		SecretHash:           Hash(secret),
+		Active:               true,
+		WrongPasswordCounter: 0,
+		LastSignInAttempt:    time.Time{},
+		LastSignIn:           time.Now().UTC(),
+		CreateTimeStamp:      time.Time{},
+		UpdateTimeStamp:      time.Time{},
+	}
+	// save new entity
+	err := Db.SaveEntity(&e)
+	if err != nil {
+		log.Fatalln(err)
+	}
 }
 
 /*
@@ -155,6 +205,10 @@ func NewEntity(entityToken string) (Entity, string, string, error) {
 
 	// delete entity token
 	err = et.Delete()
+	if err != nil {
+		return Entity{}, "", "", err
+	}
+
 	return e, password, secret, nil
 }
 
@@ -280,7 +334,7 @@ func (itc identityTokenCacheType) isIdentityTokenValid(identityToken string, val
 		Crypto functions
 	*******************************************************************
 */
-var tokenChars = []byte(`123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz.,-+#(){}[];:_#*!$%&=?|@~`)
+var tokenChars = []byte(`123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz.,-+#(){}[];:_#*!$%=?|@~`)
 var nickChars = []byte("123456789ABCDEFGHJKLMNPQRSTUVWXYZ")
 var passwordChars = []byte("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz.,-+#")
 
