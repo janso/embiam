@@ -37,7 +37,7 @@ func Initialize(aDb DbInterface) {
 	identityTokenCache.Cache = make(identityTokenCacheItemSlice, 0, 1024)
 }
 
-// CheckAuthIdentity checks nick and password and provides and identity token (for the remote address)
+// CheckAuthIdentity checks nick and password and provides and identity token (for validFor)
 func CheckAuthIdentity(authValue string, validFor string) (identityTokenStruct, error) {
 	/*
 		authValue is transfered in the http header in field "Authorization"
@@ -66,7 +66,7 @@ func CheckAuthIdentity(authValue string, validFor string) (identityTokenStruct, 
 	return CheckIdentity(nickpass[0], nickpass[1], validFor)
 }
 
-// CheckIdentity checks nick and password and provides and identity token (for the remote address)
+// CheckIdentity checks nick and password and provides and identity token (for validFor)
 func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error) {
 	identityToken := identityTokenStruct{}
 	entity, err := Db.ReadEntityByNick(nick)
@@ -129,6 +129,7 @@ func IsIdentityTokenValid(identityToken string, validFor string) bool {
 	return identityTokenCache.isIdentityTokenValid(identityToken, validFor)
 }
 
+// GenerateAndSaveMockEntity creates the entity NICK0001 to test and demo with
 func GenerateAndSaveMockEntity(nick, password, secret string) {
 	// create entity with password and secret
 	e := Entity{
@@ -151,7 +152,16 @@ func GenerateAndSaveMockEntity(nick, password, secret string) {
 
 /*
 	*******************************************************************
-		Entity
+		ENTITY
+
+		The entity describes a person or device that needs
+		authentication (and authorization). The entity is identified
+		by the so called 'nick', which is similar to a username.
+		The Entity also contains the hash of the password and hash
+		of the secret. The secret is a second, much more complex,
+		password and it is used to chance the password or to
+		unlock the entity, after it was disabled, e.g. after
+		multiple unsuccessful password entries.
 	*******************************************************************
 */
 // Entity describes a user or a device
@@ -167,7 +177,7 @@ type Entity struct {
 	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
 }
 
-// NewEntity creates a new entity
+// NewEntity creates a new entity using an entityToken
 func NewEntity(entityToken string) (Entity, string, string, error) {
 	// prepare new entity
 	e := Entity{}
@@ -219,7 +229,12 @@ func (e Entity) Save() error {
 
 /*
 	*******************************************************************
-		Entity Token
+		ENTITY TOKEN
+
+		Entity Tokens are use to create new entities. The administrator
+		creates an entity token and sends it to the new user. The new
+		user uses the entity token to create an new entity. After the
+		entity was created, the entity token is deleted.
 	*******************************************************************
 */
 type EntityToken struct {
@@ -227,7 +242,7 @@ type EntityToken struct {
 	ValidUntil time.Time
 }
 
-// NewEntityToken creates a new entity token (token itself and set validity, comming from configuration)
+// NewEntityToken creates a new entity token (token itself and validity, comming from configuration)
 func NewEntityToken() EntityToken {
 	// set end of validity
 	hours := Configuration.EntityTokenValidityHours // number of hours the entity token is valid
@@ -250,7 +265,12 @@ func (et EntityToken) Delete() error {
 
 /*
 	*******************************************************************
-		Identity Token Cache
+		IDENTITY TOKEN CACHE
+		An identity token is provides after authentication with
+		nick and password. For the subsequent actions (e.g. API calls)
+		the client (API consumer) is only using the identity token
+		instead of the credentials (nick and password).
+		So an identity token completely different than the entity token.
 	*******************************************************************
 */
 var identityTokenCache identityTokenCacheType
@@ -275,7 +295,7 @@ type identityTokenStruct struct {
 	ValidUntil time.Time
 }
 
-// add adds a new token to identity token cache
+// add a new token to the identity token cache
 func (itc *identityTokenCacheType) add(token string, validUntil time.Time, validFor string) {
 	now := time.Now().UTC()
 	emptyIdentityToken := identityTokenCacheItemStruct{}
