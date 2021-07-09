@@ -1,7 +1,0 @@
-{
-    "port": "8242",
-    "dbPath": "db/",
-    "entityTokenValidityHours": 192,
-    "identityTokenValiditySeconds": 720,
-    "maxSignInAttempts": 3
-}

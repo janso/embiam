@@ -18,8 +18,6 @@ var Db DbInterface
 
 type DbInterface interface {
 	Initialize()
-	LoadConfiguration() (ConfigurationStruct, error)
-	InitializeConfiguration()
 	ReadEntityByNick(nick string) (*Entity, error)
 	EntityExists(nick string) bool
 	SaveEntity(entity *Entity) error
@@ -29,31 +27,18 @@ type DbInterface interface {
 }
 
 /*
-	DbMock - non-persistent Db for testing and demonstration
+	DbTransient - non-persistent database for testing and demonstration
 */
-type DbMock struct {
+type DbTransient struct {
 	entityStore      map[string]Entity
 	entityTokenStore map[string]EntityToken
 }
 
-func (m *DbMock) Initialize() {
+func (m *DbTransient) Initialize() {
 	m.entityStore = make(map[string]Entity, 32)
 }
 
-func (m DbMock) LoadConfiguration() (ConfigurationStruct, error) {
-	conf := ConfigurationStruct{
-		Port:                         "8242",
-		DBPath:                       "",
-		IdentityTokenValiditySeconds: 720,
-		MaxSignInAttempts:            3,
-	}
-	return conf, nil
-}
-
-func (m *DbMock) InitializeConfiguration() {
-}
-
-func (m DbMock) ReadEntityByNick(nick string) (*Entity, error) {
+func (m DbTransient) ReadEntityByNick(nick string) (*Entity, error) {
 	e, found := m.entityStore[nick]
 	if found {
 		return &e, nil
@@ -61,22 +46,22 @@ func (m DbMock) ReadEntityByNick(nick string) (*Entity, error) {
 	return nil, errors.New("entity not found")
 }
 
-func (m DbMock) EntityExists(nick string) bool {
+func (m DbTransient) EntityExists(nick string) bool {
 	_, found := m.entityStore[nick]
 	return found
 }
 
-func (m DbMock) SaveEntity(e *Entity) error {
+func (m DbTransient) SaveEntity(e *Entity) error {
 	m.entityStore[e.Nick] = *e
 	return nil
 }
 
-func (m DbMock) SaveEntityToken(et *EntityToken) error {
+func (m DbTransient) SaveEntityToken(et *EntityToken) error {
 	m.entityTokenStore[et.Token] = *et
 	return nil
 }
 
-func (m DbMock) ReadEntityToken(token string) (*EntityToken, error) {
+func (m DbTransient) ReadEntityToken(token string) (*EntityToken, error) {
 	et, found := m.entityTokenStore[token]
 	if found {
 		return &et, nil
@@ -84,7 +69,7 @@ func (m DbMock) ReadEntityToken(token string) (*EntityToken, error) {
 	return nil, errors.New("entity token not found")
 }
 
-func (m DbMock) DeleteEntityToken(token string) error {
+func (m DbTransient) DeleteEntityToken(token string) error {
 	delete(m.entityTokenStore, token)
 	return nil
 }
@@ -93,79 +78,31 @@ func (m DbMock) DeleteEntityToken(token string) error {
 	DbFile - simple persistence use the filesystem and store json text files
 */
 
-const EntityFilePath = `entity/`
-const EntityTokenFilePath = `entityToken/`
-
-type DbFile struct{}
-
-func (m *DbFile) Initialize() {
+type DbFile struct {
+	EntityFilePath      string
+	EntityTokenFilePath string
+	DBPath              string
 }
 
-func (m DbFile) LoadConfiguration() (ConfigurationStruct, error) {
-	const ConfigurationFileName = "conf.json"
-
-	// set defaults
-	conf := ConfigurationStruct{
-		Port:                         "8242",
-		DBPath:                       "db/",
-		IdentityTokenValiditySeconds: 720,
-		MaxSignInAttempts:            3,
-	}
-
+func (m *DbFile) Initialize() {
 	// get directory of executable as basis for relativ paths
 	executableDirectory, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
 		log.Fatalf("Error %s\n", err)
 	}
-	// read configuration file from executables directory
-	filedir := executableDirectory + "/" + ConfigurationFileName
-	jsonbytes, err := ioutil.ReadFile((filedir))
-	if err != nil {
-		log.Fatalf("Error reading configuration file %s: '%s'\n", filedir, err)
-	}
-	// parse json
-	err = json.Unmarshal([]byte(jsonbytes), &conf)
-	if err != nil {
-		log.Fatalf("Error parsing configuration file %s: '%s'\n", filedir, err)
-	}
-	// complete db path (if the path is realtive make it absolute by add the directory of the executable)
-	if !filepath.IsAbs(conf.DBPath) {
-		// make relativ path absolut
-		conf.DBPath = executableDirectory + "/" + conf.DBPath
-	}
-	// if db path is initial, set to default "db/""
-	if len(conf.DBPath) == 0 {
-		conf.DBPath = "db/"
-	}
-	// check if db path exists
-	_, err = os.Stat(conf.DBPath)
-	if err != nil {
-		log.Fatalf("Error: DBPath does not exitst '%s'\n", conf.DBPath)
-	}
-	// make sure that db path ends with /
-	if conf.DBPath[len(conf.DBPath)-1:] != "/" {
-		conf.DBPath = conf.DBPath + "/"
-	}
 
-	return conf, nil // ToDo: return pointer to increase efficiency (does it really increase efficiency?)
-}
+	// set paths
+	m.DBPath = executableDirectory + `/db/`
+	m.EntityFilePath = m.DBPath + `entity/`
+	m.EntityTokenFilePath = m.DBPath + `entityToken/`
 
-func (m *DbFile) InitializeConfiguration() {
-	// create directories in db/
-	folderPath := Configuration.DBPath + EntityFilePath
-	err := os.MkdirAll(folderPath, os.ModePerm)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	folderPath = Configuration.DBPath + EntityTokenFilePath
-	err = os.MkdirAll(folderPath, os.ModePerm)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	// create paths
+	initializeDirectory(m.EntityFilePath)
+	initializeDirectory(m.EntityTokenFilePath)
 }
 
 func (m DbFile) ReadEntityByNick(nick string) (*Entity, error) {
-	filepath := Configuration.DBPath + EntityFilePath + nick
+	filepath := m.EntityFilePath + nick
 	jsonString, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		return nil, err
@@ -179,13 +116,13 @@ func (m DbFile) ReadEntityByNick(nick string) (*Entity, error) {
 }
 
 func (m DbFile) EntityExists(nick string) bool {
-	filepath := Configuration.DBPath + EntityFilePath + nick
+	filepath := m.EntityFilePath + nick
 	_, err := os.Stat(filepath)
 	return err == nil
 }
 
 func (m DbFile) SaveEntity(e *Entity) error {
-	filepath := Configuration.DBPath + EntityFilePath + e.Nick
+	filepath := m.EntityFilePath + e.Nick
 	jsonbytes, err := json.MarshalIndent(e, "", "\t")
 	if err != nil {
 		return err
@@ -198,7 +135,7 @@ func (m DbFile) SaveEntity(e *Entity) error {
 }
 
 func (m DbFile) SaveEntityToken(et *EntityToken) error {
-	filepath := Configuration.DBPath + EntityTokenFilePath + et.Token
+	filepath := m.EntityTokenFilePath + et.Token
 	jsonbytes, err := json.MarshalIndent(et, "", "\t")
 	if err != nil {
 		return err
@@ -211,7 +148,7 @@ func (m DbFile) SaveEntityToken(et *EntityToken) error {
 }
 
 func (m DbFile) ReadEntityToken(token string) (*EntityToken, error) {
-	filepath := Configuration.DBPath + EntityTokenFilePath + token
+	filepath := m.EntityTokenFilePath + token
 	jsonString, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		return nil, errors.New("entity token not found " + token)
@@ -225,7 +162,7 @@ func (m DbFile) ReadEntityToken(token string) (*EntityToken, error) {
 }
 
 func (m DbFile) DeleteEntityToken(token string) error {
-	filepath := Configuration.DBPath + EntityTokenFilePath + token
+	filepath := m.EntityTokenFilePath + token
 	err := os.Remove(filepath)
 	if err != nil {
 		return err
@@ -233,17 +170,36 @@ func (m DbFile) DeleteEntityToken(token string) error {
 	return nil
 }
 
-/*
-	*******************************************************************
-		Configuration
-	*******************************************************************
-*/
-var Configuration ConfigurationStruct
+func (m DbFile) DeleteFilesFromDirectory(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		err = os.RemoveAll(filepath.Join(dir, name))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-type ConfigurationStruct struct {
-	Port                         string `json:"port"`
-	DBPath                       string `json:"dbPath"`
-	EntityTokenValidityHours     int    `json:"entityTokenValidityHours"`
-	IdentityTokenValiditySeconds int    `json:"identityTokenValiditySeconds"`
-	MaxSignInAttempts            int    `json:"maxSignInAttempts"`
+func initializeDirectory(folderPath string) error {
+	fileinfo, err := os.Stat(folderPath)
+	if err == nil {
+		if !fileinfo.IsDir() {
+			return errors.New(folderPath + " is not a directory")
+		}
+		return nil
+	}
+	err = os.MkdirAll(folderPath, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	return nil
 }

@@ -123,8 +123,24 @@ func gettimeHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	// Initiallize (with database in filesystem)
-	embiam.Initialize(new(embiam.DbMock))
-	embiam.GenerateAndSaveMockEntity(`NICK0001`, `SeCrEtSeCrEt`, `SeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEt`)
+	embiam.Initialize(new(embiam.DbTransient))
+	// create entity
+	e := embiam.Entity{
+		Nick:                 `NICK0001`,
+		PasswordHash:         embiam.Hash(`SeCrEtSeCrEt`),
+		SecretHash:           embiam.Hash(`SeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEt`),
+		Active:               true,
+		WrongPasswordCounter: 0,
+		LastSignInAttempt:    time.Time{},
+		LastSignIn:           time.Now().UTC(),
+		CreateTimeStamp:      time.Time{},
+		UpdateTimeStamp:      time.Time{},
+	}
+	// save new entity
+	err := embiam.Db.SaveEntity(&e)
+	if err != nil {
+		log.Fatal("error saving entity", err)
+	}
 
 	// starting server
 	fmt.Printf("Starting Auth Server. Listening on port %s\n", embiam.Configuration.Port)

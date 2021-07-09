@@ -3,13 +3,14 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/janso/embiam"
 )
 
 func main() {
 	// Initiallize (with mock data)
-	embiam.Initialize(new(embiam.DbMock))
+	embiam.Initialize(new(embiam.DbTransient))
 	// embiam.Initialize(embiam.EntityModelMock{}) is not working, because it returns type embiam.EntityModelMock.
 	// new(embiam.EntityModelMock) returns *embiam.EntityModelMock.
 	// see https://jordanorelli.com/post/32665860244/how-to-use-interfaces-in-go
@@ -17,7 +18,23 @@ func main() {
 	// Generate test entities
 	for i := 1; i < 4; i++ {
 		nick := fmt.Sprintf("NICK%04d", i)
-		embiam.GenerateAndSaveMockEntity(nick, `SeCrEtSeCrEt`, `SeCrEtSeCrEtSeCrEtSeCrEt`)
+		// create entity
+		e := embiam.Entity{
+			Nick:                 nick,
+			PasswordHash:         embiam.Hash(`SeCrEtSeCrEt`),
+			SecretHash:           embiam.Hash(`SeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEt`),
+			Active:               true,
+			WrongPasswordCounter: 0,
+			LastSignInAttempt:    time.Time{},
+			LastSignIn:           time.Now().UTC(),
+			CreateTimeStamp:      time.Time{},
+			UpdateTimeStamp:      time.Time{},
+		}
+		// save new entity
+		err := embiam.Db.SaveEntity(&e)
+		if err != nil {
+			log.Fatal("error saving entity", err)
+		}
 	}
 
 	// Use nick and password to get an identity token (for the client's ip address)
@@ -43,7 +60,7 @@ func main() {
 	fmt.Printf("Sign in with INCORRECT nick and password\n")
 	identityToken, err = embiam.CheckIdentity("NICK0001", "wrongPassword", "localhost")
 	if err != nil {
-		fmt.Printf("  Error signin in: %s\n", err)
+		fmt.Printf("  Error signin in: %s (that was expected)\n", err)
 	} else {
 		log.Fatalln("must not return identityToken")
 	}

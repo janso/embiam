@@ -5,7 +5,6 @@ package embiam
 import (
 	"encoding/base64"
 	"errors"
-	"log"
 	"math/rand"
 	"strings"
 	"time"
@@ -13,24 +12,31 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var Configuration ConfigurationStruct
+
+type ConfigurationStruct struct {
+	Port                         string `json:"port"`
+	EntityTokenValidityHours     int    `json:"entityTokenValidityHours"`
+	IdentityTokenValiditySeconds int    `json:"identityTokenValiditySeconds"`
+	MaxSignInAttempts            int    `json:"maxSignInAttempts"`
+}
+
 // Initialize prepares embiam
 func Initialize(aDb DbInterface) {
 	// initialize randomizer
 	rand.Seed(time.Now().UTC().UnixNano())
 
+	// set default configuration
+	Configuration = ConfigurationStruct{
+		Port:                         "8242",
+		EntityTokenValidityHours:     168,
+		IdentityTokenValiditySeconds: 720,
+		MaxSignInAttempts:            5,
+	}
+
 	// initialize entity model
 	Db = aDb
 	Db.Initialize()
-
-	// load configuration
-	var err error
-	Configuration, err = Db.LoadConfiguration()
-	if err != nil {
-		log.Fatalln("Error loading configuration")
-	}
-
-	// initialize based on configuration
-	Db.InitializeConfiguration()
 
 	//  initialize the token cache
 	identityTokenCache := identityTokenCacheType{}
@@ -127,27 +133,6 @@ func IsAuthIdentityTokenValid(authValue string, validFor string) bool {
 // IsIdentityTokenValid checks if the identity token is valid, validFor contains information about the client, e.g. the IP address
 func IsIdentityTokenValid(identityToken string, validFor string) bool {
 	return identityTokenCache.isIdentityTokenValid(identityToken, validFor)
-}
-
-// GenerateAndSaveMockEntity creates the entity NICK0001 to test and demo with
-func GenerateAndSaveMockEntity(nick, password, secret string) {
-	// create entity with password and secret
-	e := Entity{
-		Nick:                 nick,
-		PasswordHash:         Hash(password),
-		SecretHash:           Hash(secret),
-		Active:               true,
-		WrongPasswordCounter: 0,
-		LastSignInAttempt:    time.Time{},
-		LastSignIn:           time.Now().UTC(),
-		CreateTimeStamp:      time.Time{},
-		UpdateTimeStamp:      time.Time{},
-	}
-	// save new entity
-	err := Db.SaveEntity(&e)
-	if err != nil {
-		log.Fatalln(err)
-	}
 }
 
 /*

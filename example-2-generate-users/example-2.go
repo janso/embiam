@@ -3,19 +3,18 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 
 	"github.com/janso/embiam"
 )
 
 func main() {
 	// Initiallize (using filesystem as database)
-	embiam.Initialize(new(embiam.DbFile))
+	embiamModel := new(embiam.DbFile)
+	embiam.Initialize(embiamModel)
 
 	// clean up db
-	removeContents(embiam.Configuration.DBPath + embiam.EntityFilePath)
-	removeContents(embiam.Configuration.DBPath + embiam.EntityTokenFilePath)
+	embiamModel.DeleteFilesFromDirectory(embiamModel.EntityFilePath)
+	embiamModel.DeleteFilesFromDirectory(embiamModel.EntityTokenFilePath)
 
 	/*
 	   GENERATE SOME ENTITIES (users)
@@ -67,23 +66,4 @@ func main() {
 	} else {
 		log.Fatalln(err)
 	}
-}
-
-func removeContents(dir string) error {
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	names, err := d.Readdirnames(-1)
-	if err != nil {
-		return err
-	}
-	for _, name := range names {
-		err = os.RemoveAll(filepath.Join(dir, name))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }

@@ -27,12 +27,27 @@ func TestGetIdentityTokenMock(t *testing.T) {
 	const testNick = "nick0001"
 
 	// initialize embiam
-	Initialize(new(DbMock))
+	Initialize(new(DbTransient))
 
 	// Generate test entities
 	for i := 1; i <= nickCount; i++ {
 		nick := fmt.Sprintf(nickPattern, i)
-		GenerateAndSaveMockEntity(nick, testPassword, `SeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEt`)
+		e := Entity{
+			Nick:                 nick,
+			PasswordHash:         Hash(testPassword),
+			SecretHash:           Hash(`SeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEt`),
+			Active:               true,
+			WrongPasswordCounter: 0,
+			LastSignInAttempt:    time.Time{},
+			LastSignIn:           time.Now().UTC(),
+			CreateTimeStamp:      time.Time{},
+			UpdateTimeStamp:      time.Time{},
+		}
+		// save new entity
+		err := Db.SaveEntity(&e)
+		if err != nil {
+			t.Errorf("Db.SaveEntity(&e) returned error %s; want save entity without error", err)
+		}
 	}
 
 	// Use credentials (nick and password) to get an identity token (for the client's ip address)
@@ -74,4 +89,84 @@ func TestGetIdentityTokenMock(t *testing.T) {
 			t.Errorf("IsIdentityTokenValid(identityToken.Token, host) has returned false after concurrent sign in; want true")
 		}
 	}
+}
+
+func TestCreateEntityWithFileDb(t *testing.T) {
+	const nickCount = 5
+	const nickPattern = "nick%04d"
+
+	// Initiallize (using filesystem as database)
+	model := new(DbFile)
+	Initialize(model)
+
+	// clean up db
+	t.Log("Deleting files from " + model.EntityFilePath)
+	model.DeleteFilesFromDirectory(model.EntityFilePath)
+	t.Log("Deleting files from " + model.EntityTokenFilePath)
+	model.DeleteFilesFromDirectory(model.EntityTokenFilePath)
+
+	// Generate test entities
+	for i := 1; i <= nickCount; i++ {
+		nick := fmt.Sprintf(nickPattern, i)
+		e := Entity{
+			Nick:                 nick,
+			PasswordHash:         Hash(testPassword),
+			SecretHash:           Hash(`SeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEt`),
+			Active:               true,
+			WrongPasswordCounter: 0,
+			LastSignInAttempt:    time.Time{},
+			LastSignIn:           time.Now().UTC(),
+			CreateTimeStamp:      time.Time{},
+			UpdateTimeStamp:      time.Time{},
+		}
+		// save new entity
+		err := Db.SaveEntity(&e)
+		if err != nil {
+			t.Errorf("Db.SaveEntity(&e) returned error %s; want save entity without error", err)
+		}
+	}
+
+	/*
+	   GENERATE SOME ENTITIES (users)
+	   following the usual process:
+	   1. the admin generates an entity token and provides it to the user
+	   2. the user creates his personal entity using the entity token
+	*/
+	// 1. generate entity tokens (they are provided by the adminitrator and used by the user to generate the entity)
+	entityTokens := make([]string, 0, nickCount)
+	for i := 0; i < 3; i++ {
+		entityToken := NewEntityToken()
+		entityToken.Save()
+		entityTokens = append(entityTokens, entityToken.Token)
+	}
+
+	// 2. use entity tokens to generate real, usable entities
+	entity := Entity{}
+	password := ""
+	var err error
+	for i := 0; i < 3; i++ {
+		entity, password, _, err = NewEntity(entityTokens[i])
+		if err != nil {
+			t.Errorf("NewEntity(entityTokens[i]) returned error %s; want new entity without error", err)
+		}
+	}
+
+	/*
+		GET IDENTITY TOKEN
+		from nick and password
+	*/
+	// provide nick and password and get identity token back
+	identityToken, err := CheckIdentity(entity.Nick, password, testHost)
+	if err != nil {
+		t.Errorf("CheckIdentity(entity.Nick, password, testHost) returned error %s; want identity token without error", err)
+	}
+	// receive an identity token to use later (without credentials)
+
+	// With the provided identity token, the user can e.g. call APIs
+	// When an API is called, the client passes the identity token  to the server.
+	// The server checks the identity token
+	if !IsIdentityTokenValid(identityToken.Token, testHost) {
+		t.Errorf("IsIdentityTokenValid(identityToken.Token, testHost) returned false (invalid identity); want true (identity token need to be valid)")
+	}
+
 }
