@@ -16,4 +16,4 @@ __debug_bin
 # vendor/
 
 # contents of the db directory
-*/db/*
+*/embiamDb/*

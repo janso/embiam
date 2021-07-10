@@ -126,7 +126,7 @@ func main() {
 	embiam.Initialize(new(embiam.DbTransient))
 	// create entity
 	e := embiam.Entity{
-		Nick:                 `NICK0001`,
+		Nick:                 `N1CK0001`,
 		PasswordHash:         embiam.Hash(`SeCrEtSeCrEt`),
 		SecretHash:           embiam.Hash(`SeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEt`),
 		Active:               true,

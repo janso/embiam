@@ -69,7 +69,8 @@ func CheckAuthIdentity(authValue string, validFor string) (identityTokenStruct, 
 		return identityTokenStruct{}, errors.New("invalid authorization")
 	}
 	// do actual check
-	return CheckIdentity(nickpass[0], nickpass[1], validFor)
+	identityToken, err := CheckIdentity(nickpass[0], nickpass[1], validFor)
+	return identityToken, err
 }
 
 // CheckIdentity checks nick and password and provides and identity token (for validFor)
@@ -77,7 +78,7 @@ func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error)
 	identityToken := identityTokenStruct{}
 	entity, err := Db.ReadEntityByNick(nick)
 	if err != nil {
-		return identityToken, errors.New("nick not found")
+		return identityToken, errors.New("entity not found for nick" + nick)
 	}
 	// check if entity is active
 	if !entity.Active {
@@ -92,11 +93,15 @@ func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error)
 			// deactivate entity because of multiple wrong attempts
 			entity.Active = false
 		}
+		// save failed signin
 		entity.LastSignInAttempt = time.Now().UTC()
 		Db.SaveEntity(entity)
 		// return error
 		return identityToken, errors.New("invalid password")
 	}
+	// save successful sign in
+	entity.LastSignIn = time.Now().UTC()
+	Db.SaveEntity(entity)
 
 	// create identity token
 	identityToken.Token = GenerateIdentityToken()
@@ -127,28 +132,32 @@ func IsAuthIdentityTokenValid(authValue string, validFor string) bool {
 	if authPart[0] != "embiam" {
 		return false
 	}
-	return identityTokenCache.isIdentityTokenValid(authPart[1], validFor)
+	// base64 decode
+	decodedToken, err := base64.StdEncoding.DecodeString(authPart[1])
+	if err != nil {
+		return false
+	}
+	return identityTokenCache.isIdentityTokenValid(string(decodedToken), validFor)
 }
 
 // IsIdentityTokenValid checks if the identity token is valid, validFor contains information about the client, e.g. the IP address
-func IsIdentityTokenValid(identityToken string, validFor string) bool {
-	return identityTokenCache.isIdentityTokenValid(identityToken, validFor)
+func IsIdentityTokenValid(token string, validFor string) bool {
+	return identityTokenCache.isIdentityTokenValid(token, validFor)
 }
 
-/*
-	*******************************************************************
-		ENTITY
+/********************************************************************
+	ENTITY
 
-		The entity describes a person or device that needs
-		authentication (and authorization). The entity is identified
-		by the so called 'nick', which is similar to a username.
-		The Entity also contains the hash of the password and hash
-		of the secret. The secret is a second, much more complex,
-		password and it is used to chance the password or to
-		unlock the entity, after it was disabled, e.g. after
-		multiple unsuccessful password entries.
-	*******************************************************************
-*/
+	The entity describes a person or device that needs
+	authentication (and authorization). The entity is identified
+	by the so called 'nick', which is similar to a username.
+	The entity also contains the hash of the password and hash
+	of the secret. The secret is a second, more complex,
+	password and it is used to chance the password or to
+	unlock the entity, after it was disabled, e.g. after
+	multiple unsuccessful password entries.
+*********************************************************************/
+
 // Entity describes a user or a device
 type Entity struct {
 	Nick                 string    `json:"nick"`
@@ -193,7 +202,7 @@ func NewEntity(entityToken string) (Entity, string, string, error) {
 	}
 
 	// save new entity
-	err = e.Save()
+	err = Db.SaveEntity(&e)
 	if err != nil {
 		return Entity{}, "", "", err
 	}
@@ -207,21 +216,14 @@ func NewEntity(entityToken string) (Entity, string, string, error) {
 	return e, password, secret, nil
 }
 
-// Save uses the entity model to save 'e' persistently
-func (e Entity) Save() error {
-	return Db.SaveEntity(&e)
-}
+/********************************************************************
+	ENTITY TOKEN
 
-/*
-	*******************************************************************
-		ENTITY TOKEN
-
-		Entity Tokens are use to create new entities. The administrator
-		creates an entity token and sends it to the new user. The new
-		user uses the entity token to create an new entity. After the
-		entity was created, the entity token is deleted.
-	*******************************************************************
-*/
+	Entity Tokens are used to create new entities. The administrator
+	creates an entity token and sends it to the new user. The new
+	user uses the entity token to create an new entity. After the
+	entity was created, the entity token is deleted.
+********************************************************************/
 type EntityToken struct {
 	Token      string
 	ValidUntil time.Time
@@ -248,16 +250,14 @@ func (et EntityToken) Delete() error {
 	return Db.DeleteEntityToken(et.Token)
 }
 
-/*
-	*******************************************************************
-		IDENTITY TOKEN CACHE
-		An identity token is provides after authentication with
-		nick and password. For the subsequent actions (e.g. API calls)
-		the client (API consumer) is only using the identity token
-		instead of the credentials (nick and password).
-		So an identity token completely different than the entity token.
-	*******************************************************************
-*/
+/********************************************************************
+	IDENTITY TOKEN CACHE
+	An identity token is provides after authentication with
+	nick and password. For the subsequent actions (e.g. API calls)
+	the client (API consumer) is only using the identity token
+	instead of the credentials (nick and password).
+	So an identity token completely different than the entity token.
+********************************************************************/
 var identityTokenCache identityTokenCacheType
 
 // identityTokenCacheItemStruct describes on record of the internal list of provided identity tokens
@@ -275,6 +275,7 @@ type identityTokenCacheType struct {
 	Cache identityTokenCacheItemSlice
 }
 
+// identityTokenStruct is the type for the identity token send to the client, containing the actual token and validUntil
 type identityTokenStruct struct {
 	Token      string
 	ValidUntil time.Time
@@ -309,36 +310,37 @@ func (itc *identityTokenCacheType) add(token string, validUntil time.Time, valid
 }
 
 // isIdentityTokenValid checks if an identity token is valid
-func (itc identityTokenCacheType) isIdentityTokenValid(identityToken string, validFor string) bool {
-	now := time.Now().UTC()
-	emptyToken := identityTokenCacheItemStruct{}
+func (itc identityTokenCacheType) isIdentityTokenValid(tokenToTest string, validFor string) bool {
+	if len(tokenToTest) == 0 {
+		return false
+	}
 
-	for i, token := range identityTokenCache.Cache {
-		if token == emptyToken {
+	now := time.Now().UTC()
+	emptyIdentityToken := identityTokenCacheItemStruct{}
+
+	for i, identityTokenFromCache := range identityTokenCache.Cache {
+		if identityTokenFromCache == emptyIdentityToken {
 			continue
 		}
 		// invalidate token that ran out of validity (by setting it empty)
-		if token.ValidUntil.Before(now) {
-			identityTokenCache.Cache[i] = emptyToken
+		if identityTokenFromCache.ValidUntil.Before(now) {
+			identityTokenCache.Cache[i] = emptyIdentityToken
 			continue
 		}
-		// check identity token
-		if itc.Cache[i].Token == identityToken {
+		// check if tokens are equal
+		if identityTokenCache.Cache[i].Token == tokenToTest {
 			// check if client's address is correct
-			if identityTokenCache.Cache[i].ValidFor == validFor {
+			if identityTokenFromCache.ValidFor == validFor {
 				return true
 			}
 		}
 	}
-
 	return false
 }
 
-/*
-	*******************************************************************
-		Crypto functions
-	*******************************************************************
-*/
+/********************************************************************
+	Crypto functions and generators
+********************************************************************/
 var tokenChars = []byte(`123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz.,-+#(){}[];:_#*!$%=?|@~`)
 var nickChars = []byte("123456789ABCDEFGHJKLMNPQRSTUVWXYZ")
 var passwordChars = []byte("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz.,-+#")

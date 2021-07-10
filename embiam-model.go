@@ -9,11 +9,9 @@ import (
 	"path/filepath"
 )
 
-/*
-	*******************************************************************
-		Database (persistent storage)
-	*******************************************************************
-*/
+/********************************************************************
+	Interface Db (database, persistent storage)
+********************************************************************/
 var Db DbInterface
 
 type DbInterface interface {
@@ -75,9 +73,8 @@ func (m DbTransient) DeleteEntityToken(token string) error {
 }
 
 /*
-	DbFile - simple persistence use the filesystem and store json text files
+	DbFile - use the filesystem and store json files
 */
-
 type DbFile struct {
 	EntityFilePath      string
 	EntityTokenFilePath string
@@ -92,13 +89,13 @@ func (m *DbFile) Initialize() {
 	}
 
 	// set paths
-	m.DBPath = executableDirectory + `/db/`
+	m.DBPath = executableDirectory + `/embiamDb/`
 	m.EntityFilePath = m.DBPath + `entity/`
 	m.EntityTokenFilePath = m.DBPath + `entityToken/`
 
 	// create paths
-	initializeDirectory(m.EntityFilePath)
-	initializeDirectory(m.EntityTokenFilePath)
+	InitializeDirectory(m.EntityFilePath)
+	InitializeDirectory(m.EntityTokenFilePath)
 }
 
 func (m DbFile) ReadEntityByNick(nick string) (*Entity, error) {
@@ -170,7 +167,7 @@ func (m DbFile) DeleteEntityToken(token string) error {
 	return nil
 }
 
-func (m DbFile) DeleteFilesFromDirectory(dir string) error {
+func (m DbFile) DeleteContentsFromDirectory(dir string) error {
 	d, err := os.Open(dir)
 	if err != nil {
 		return err
@@ -189,7 +186,8 @@ func (m DbFile) DeleteFilesFromDirectory(dir string) error {
 	return nil
 }
 
-func initializeDirectory(folderPath string) error {
+// InitializeDirectory checks if 'folderPath' exists and creates it, if it's not existing
+func InitializeDirectory(folderPath string) error {
 	fileinfo, err := os.Stat(folderPath)
 	if err == nil {
 		if !fileinfo.IsDir() {

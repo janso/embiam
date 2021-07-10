@@ -13,8 +13,8 @@ func main() {
 	embiam.Initialize(embiamModel)
 
 	// clean up db
-	embiamModel.DeleteFilesFromDirectory(embiamModel.EntityFilePath)
-	embiamModel.DeleteFilesFromDirectory(embiamModel.EntityTokenFilePath)
+	embiamModel.DeleteContentsFromDirectory(embiamModel.EntityFilePath)
+	embiamModel.DeleteContentsFromDirectory(embiamModel.EntityTokenFilePath)
 
 	/*
 	   GENERATE SOME ENTITIES (users)
