@@ -16,12 +16,17 @@ var Db DbInterface
 
 type DbInterface interface {
 	Initialize()
+	// Entity
 	ReadEntityByNick(nick string) (*Entity, error)
 	EntityExists(nick string) bool
 	SaveEntity(entity *Entity) error
+	// Entity Tokens
 	SaveEntityToken(entityToken *EntityToken) error
 	ReadEntityToken(tokenoken string) (*EntityToken, error)
 	DeleteEntityToken(token string) error
+	// Auth Nodes
+	ReadAuthNodes(authNode *[]AuthNodeStruct) error
+	SaveAuthNodes(authNode *[]AuthNodeStruct) error
 }
 
 /*
@@ -72,12 +77,23 @@ func (m DbTransient) DeleteEntityToken(token string) error {
 	return nil
 }
 
+func (m DbTransient) ReadAuthNodes(authNode *[]AuthNodeStruct) error {
+	// ToDo: Implement
+	return nil
+}
+
+func (m DbTransient) SaveAuthNodes(authNode *[]AuthNodeStruct) error {
+	// ToDo: Implement
+	return nil
+}
+
 /*
 	DbFile - use the filesystem and store json files
 */
 type DbFile struct {
 	EntityFilePath      string
 	EntityTokenFilePath string
+	AuthNodeFilePath    string
 	DBPath              string
 }
 
@@ -92,10 +108,12 @@ func (m *DbFile) Initialize() {
 	m.DBPath = executableDirectory + `/embiamDb/`
 	m.EntityFilePath = m.DBPath + `entity/`
 	m.EntityTokenFilePath = m.DBPath + `entityToken/`
+	m.AuthNodeFilePath = m.DBPath + `authNode/`
 
 	// create paths
 	InitializeDirectory(m.EntityFilePath)
 	InitializeDirectory(m.EntityTokenFilePath)
+	InitializeDirectory(m.AuthNodeFilePath)
 }
 
 func (m DbFile) ReadEntityByNick(nick string) (*Entity, error) {
@@ -182,6 +200,34 @@ func (m DbFile) DeleteContentsFromDirectory(dir string) error {
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (m DbFile) ReadAuthNodes(authNodes *[]AuthNodeStruct) error {
+	filepath := m.AuthNodeFilePath + "embiam_entity.json"
+	jsonString, err := ioutil.ReadFile(filepath)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal([]byte(jsonString), authNodes)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m DbFile) SaveAuthNodes(authNodes *[]AuthNodeStruct) error {
+	jsonbytes, err := json.Marshal(authNodes)
+	if err != nil {
+		return err
+	}
+
+	filepath := m.AuthNodeFilePath + "embiam_entity.json"
+	os.Remove(filepath)
+	err = ioutil.WriteFile(filepath, jsonbytes, 0644)
+	if err != nil {
+		return err
 	}
 	return nil
 }

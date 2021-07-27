@@ -1,8 +1,10 @@
 package embiam
 
+var authNode []AuthNodeStruct
+
 type AuthNodeStruct struct {
-	Id            string              `json:"ressource"`     // Id is the unique name of the authorization node
-	Children      []string            `json:"node"`          // refers to other nodes to inherted their authorization
+	Id            string              `json:"id"`            // Id is the unique name of the authorization node
+	Node          []string            `json:"node"`          // refers to other nodes to inherted their authorization
 	Authorization map[string][]string `json:"authorization"` // actual authorisition
 }
 

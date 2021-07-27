@@ -44,33 +44,35 @@ func Initialize(aDb DbInterface) {
 }
 
 // CheckAuthIdentity checks nick and password and provides and identity token (for validFor)
-func CheckAuthIdentity(authValue string, validFor string) (identityTokenStruct, error) {
+// it also returns the nick, that was checked
+func CheckAuthIdentity(authValue string, validFor string) (identityTokenStruct, string, error) {
 	/*
 		authValue is transfered in the http header in field "Authorization"
 		and it is determined by r.Header.Get("Authorization")
 		it's value consists of the term embiam an the nick and password,
 		separated by colon and base64-encoded. Like in simple authentication
 	*/
+	errorInvalidAuthorization := errors.New("invalid authorization")
 	authPart := strings.Split(authValue, " ")
 	if len(authPart) < 2 {
-		return identityTokenStruct{}, errors.New("invalid authorization")
+		return identityTokenStruct{}, "", errorInvalidAuthorization
 	}
 	if authPart[0] != "embiam" {
-		return identityTokenStruct{}, errors.New("invalid authorization")
+		return identityTokenStruct{}, "", errorInvalidAuthorization
 	}
 	// base64 decode
 	decodedCredentials, err := base64.StdEncoding.DecodeString(authPart[1])
 	if err != nil {
-		return identityTokenStruct{}, errors.New("invalid authorization")
+		return identityTokenStruct{}, "", errorInvalidAuthorization
 	}
 	// split username and password
 	nickpass := strings.Split(string(decodedCredentials), ":")
 	if len(nickpass) < 2 {
-		return identityTokenStruct{}, errors.New("invalid authorization")
+		return identityTokenStruct{}, "", errorInvalidAuthorization
 	}
 	// do actual check
 	identityToken, err := CheckIdentity(nickpass[0], nickpass[1], validFor)
-	return identityToken, err
+	return identityToken, nickpass[0], err
 }
 
 // CheckIdentity checks nick and password and provides and identity token (for validFor)

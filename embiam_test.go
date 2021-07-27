@@ -176,7 +176,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 	// simulate authValue
 	authValue := "embiam " + base64.StdEncoding.EncodeToString([]byte(entity.Nick+":"+password))
 	// get identityToken with authValue
-	identityToken, err = CheckAuthIdentity(authValue, TEST_HOST)
+	identityToken, _, err = CheckAuthIdentity(authValue, TEST_HOST)
 	if err != nil {
 		t.Errorf("CheckAuthIdentity(authValue, testHost) with authValue %s returned error %s; want identity token without error", authValue, err)
 	}

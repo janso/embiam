@@ -71,13 +71,13 @@ func embiamidentityTokenGetHandler(w http.ResponseWriter, r *http.Request) {
 	// nick and password are concatenant with a colon seperating both. The result is base64 encoded
 	// like in simple authentication. e.g. 'embiam REhXUEhTVUw6ZFRjaHguNy15aC5CREVjNw=='
 	// the generated identity token will be connected to validFor to improve security
-	identityToken, err := embiam.CheckAuthIdentity(authValue, validFor)
+	identityToken, nick, err := embiam.CheckAuthIdentity(authValue, validFor)
 	if err != nil {
 		http.Error(w, "", http.StatusForbidden)
 		return
 	}
 	// no error, successfully identified
-	fmt.Printf("\tIdentity verfied and identity token %s provided\n\n", identityToken.Token)
+	fmt.Printf("\tIdentity %s verfied and identity token %s provided\n\n", nick, identityToken.Token)
 
 	// send identity token back
 	w.WriteHeader(http.StatusOK)
