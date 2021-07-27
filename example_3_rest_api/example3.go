@@ -10,9 +10,9 @@ Test with CURL
 	The result is base64-encoded, and leads to the credentials TklDSzAwMDE6U2VDckV0U2VDckV0.
 
 	make a HTTP GET request to http://localhost:8242/api/embiam/identityToken and
-	use the head field "Authorization: embiam TklDSzAwMDE6U2VDckV0U2VDckV0"
+	use the head field "Authorization:embiam TjFDSzAwMDE6U2VDckV0U2VDckV0"
 
-	$ curl -i -H "Authorization: embiam TklDSzAwMDE6U2VDckV0U2VDckV0" http://localhost:8242/api/embiam/identityToken
+	$ curl -i -H "Authorization:embiam TjFDSzAwMDE6U2VDckV0U2VDckV0" http://localhost:8242/api/embiam/identityToken
 
 	you receive
 	HTTP/1.1 200 OK
@@ -77,7 +77,7 @@ func embiamidentityTokenGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// no error, successfully identified
-	fmt.Printf("\tIdentity %s verfied and identity token %s provided\n\n", nick, identityToken.Token)
+	fmt.Printf("\tIdentity %s verfied and identity token %s provided\n", nick, identityToken.Token)
 
 	// send identity token back
 	w.WriteHeader(http.StatusOK)
