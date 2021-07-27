@@ -5,6 +5,7 @@ package embiam
 import (
 	"encoding/base64"
 	"errors"
+	"log"
 	"math/rand"
 	"strings"
 	"time"
@@ -80,7 +81,7 @@ func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error)
 	identityToken := identityTokenStruct{}
 	entity, err := Db.ReadEntityByNick(nick)
 	if err != nil {
-		return identityToken, errors.New("entity not found for nick" + nick)
+		return identityToken, err
 	}
 	// check if entity is active
 	if !entity.Active {
@@ -97,7 +98,10 @@ func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error)
 		}
 		// save failed signin
 		entity.LastSignInAttempt = time.Now().UTC()
-		Db.SaveEntity(entity)
+		err = Db.SaveEntity(entity)
+		if err != nil {
+			log.Printf("ERROR saving nick %s after wrong password\n", nick)
+		}
 		// return error
 		return identityToken, errors.New("invalid password")
 	}

@@ -51,7 +51,7 @@ func main() {
 		from nick and password
 	*/
 	// provide nick and password and get identity token back
-	identityToken, err := embiam.CheckIdentity(entity.Nick, password, "localhost")
+	identityToken, err := embiam.CheckIdentity(entity.Nick, password+"+", "localhost")
 	if err != nil {
 		log.Fatalln(err)
 	}

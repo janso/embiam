@@ -3,6 +3,7 @@ package embiam
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -120,12 +121,12 @@ func (m DbFile) ReadEntityByNick(nick string) (*Entity, error) {
 	filepath := m.EntityFilePath + nick
 	jsonString, err := ioutil.ReadFile(filepath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error '%s' reading file '%s'", err.Error(), filepath)
 	}
 	entity := Entity{}
 	err = json.Unmarshal([]byte(jsonString), &entity)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error '%s' unmarshalling nick %s", err.Error(), nick)
 	}
 	return &entity, nil
 }
@@ -144,6 +145,7 @@ func (m DbFile) SaveEntity(e *Entity) error {
 	}
 	err = ioutil.WriteFile(filepath, jsonbytes, 0644)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 	return nil
