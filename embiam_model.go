@@ -145,7 +145,6 @@ func (m DbFile) SaveEntity(e *Entity) error {
 	}
 	err = ioutil.WriteFile(filepath, jsonbytes, 0644)
 	if err != nil {
-		log.Println(err)
 		return err
 	}
 	return nil
@@ -224,7 +223,6 @@ func (m DbFile) SaveAuthNodes(authNodes *[]AuthNodeStruct) error {
 	if err != nil {
 		return err
 	}
-
 	filepath := m.AuthNodeFilePath + "embiam_entity.json"
 	os.Remove(filepath)
 	err = ioutil.WriteFile(filepath, jsonbytes, 0644)

@@ -210,7 +210,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 	}
 
 	/*
-		LOG ENTITY
+		LOCK ENTITY
 		After serveral wrong sign in attempts the entity is locked.
 		The number of attempts can be configured, check embiam.Configuration.MaxSignInAttempts
 		The entity is locked by setting Entity.Active to false.

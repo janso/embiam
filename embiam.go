@@ -107,7 +107,10 @@ func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error)
 	}
 	// save successful sign in
 	entity.LastSignIn = time.Now().UTC()
-	Db.SaveEntity(entity)
+	err = Db.SaveEntity(entity)
+	if err != nil {
+		log.Printf("ERROR saving nick %s after sign in\n", nick)
+	}
 
 	// create identity token
 	identityToken.Token = GenerateIdentityToken()
@@ -283,8 +286,8 @@ type identityTokenCacheType struct {
 
 // identityTokenStruct is the type for the identity token send to the client, containing the actual token and validUntil
 type identityTokenStruct struct {
-	Token      string
-	ValidUntil time.Time
+	Token      string    `json:"token"`
+	ValidUntil time.Time `json:"validUntil"`
 }
 
 // add a new token to the identity token cache

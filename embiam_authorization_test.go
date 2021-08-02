@@ -55,5 +55,5 @@ func TestAuthNode(t *testing.T) {
 		t.Errorf("Error loading authorization nodes %s; want save without error\n", err)
 	}
 
-	t.Logf("%s\n", authNodes)
+	// t.Logf("%s\n", authNodes)
 }
