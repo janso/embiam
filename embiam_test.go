@@ -92,17 +92,19 @@ func TestGetIdentityTokenMock(t *testing.T) {
 }
 
 func TestCreateEntityWithFileDb(t *testing.T) {
-	const NICK_COUNT = 5
+	const NICK_COUNT = 4
+	const ENTITY_COUNT = 4
 
 	// Initiallize (using filesystem as database)
-	model := new(DbFile)
-	Initialize(model)
+	db := new(DbFile)
+	Initialize(db)
 
 	// clean up db
-	model.DeleteContentsFromDirectory(model.EntityFilePath)
-	model.DeleteContentsFromDirectory(model.EntityTokenFilePath)
+	db.DeleteContentsFromDirectory(db.EntityFilePath)
+	db.DeleteContentsFromDirectory(db.EntityTokenFilePath)
 
 	// Generate test entities
+	// Create them directly without the usualprocedure with entity tokens
 	for i := 1; i <= NICK_COUNT; i++ {
 		nick := fmt.Sprintf(NICK_PATTERN, i)
 		e := Entity{
@@ -131,7 +133,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 	*/
 	// 1. generate entity tokens (they are provided by the adminitrator and used by the user to generate the entity)
 	entityTokens := make([]string, 0, NICK_COUNT)
-	for i := 0; i < 3; i++ {
+	for i := 0; i < ENTITY_COUNT; i++ {
 		entityToken := NewEntityToken()
 		entityToken.Save()
 		entityTokens = append(entityTokens, entityToken.Token)
@@ -141,11 +143,35 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 	entity := Entity{}
 	password := ""
 	var err error
-	for i := 0; i < 3; i++ {
+	for i := 0; i < ENTITY_COUNT; i++ {
 		entity, password, _, err = NewEntity(entityTokens[i])
 		if err != nil {
 			t.Errorf("NewEntity(entityTokens[i]) returned error %s; want new entity without error\n", err)
 		}
+	}
+
+	/*
+		READ ENTITIES
+	*/
+	// 1. get list of all entities
+	nicklist, err := db.ReadEntityList()
+	if err != nil {
+		t.Errorf("model.ReadEntityList() returned error %s; want list of nicks\n", err)
+	}
+
+	// 2. read each individual entity using the list
+	entityList := make([]Entity, 0, len(nicklist))
+	for _, nick := range nicklist {
+		entity, err := db.ReadEntityByNick(nick)
+		if err != nil {
+			t.Errorf("model.ReadEntityByNick(nick) returned error %s for nick %s; want entity for nick\n", err, nick)
+		}
+		entityList = append(entityList, *entity)
+	}
+
+	// 3. check result
+	if len(entityList) != len(nicklist) {
+		t.Errorf("Number of read entities is not equal to the number of requests entities; want same number\n")
 	}
 
 	/*

@@ -18,6 +18,7 @@ var Db DbInterface
 type DbInterface interface {
 	Initialize()
 	// Entity
+	ReadEntityList() (nicklist []string, e error)
 	ReadEntityByNick(nick string) (*Entity, error)
 	EntityExists(nick string) bool
 	SaveEntity(entity *Entity) error
@@ -40,6 +41,14 @@ type DbTransient struct {
 
 func (m *DbTransient) Initialize() {
 	m.entityStore = make(map[string]Entity, 32)
+}
+
+func (m DbTransient) ReadEntityList() (nicklist []string, e error) {
+	nicklist = make([]string, len(m.entityStore))
+	for _, entity := range m.entityStore {
+		nicklist = append(nicklist, entity.Nick)
+	}
+	return nicklist, nil
 }
 
 func (m DbTransient) ReadEntityByNick(nick string) (*Entity, error) {
@@ -115,6 +124,20 @@ func (m *DbFile) Initialize() {
 	InitializeDirectory(m.EntityFilePath)
 	InitializeDirectory(m.EntityTokenFilePath)
 	InitializeDirectory(m.AuthNodeFilePath)
+}
+
+func (m DbFile) ReadEntityList() (nicklist []string, e error) {
+	files, err := ioutil.ReadDir(m.EntityFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("error '%s' reading directory '%s'", err.Error(), m.EntityFilePath)
+	}
+	nicklist = make([]string, 0, len(files))
+	for _, file := range files {
+		if !file.IsDir() {
+			nicklist = append(nicklist, file.Name())
+		}
+	}
+	return nicklist, nil
 }
 
 func (m DbFile) ReadEntityByNick(nick string) (*Entity, error) {

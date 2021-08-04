@@ -17,3 +17,4 @@ __debug_bin
 
 # contents of the db directory
 */embiamDb/*
+embiamDb/entity/*
