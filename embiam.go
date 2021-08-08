@@ -234,8 +234,8 @@ func NewEntity(entityToken string) (Entity, string, string, error) {
 	entity was created, the entity token is deleted.
 ********************************************************************/
 type EntityToken struct {
-	Token      string
-	ValidUntil time.Time
+	Token      string    `json:"token"`
+	ValidUntil time.Time `json:"validUntil"`
 }
 
 // NewEntityToken creates a new entity token (token itself and validity, comming from configuration)
