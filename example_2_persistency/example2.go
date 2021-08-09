@@ -32,18 +32,16 @@ func main() {
 	}
 
 	// 2. use entity tokens to generate real, usable entities
-	entity := embiam.Entity{}
-	password := ""
-	secret := ""
+	newEntity := embiam.NewEntityStruct{}
 	var err error
 	for i := 0; i < 3; i++ {
-		entity, password, secret, err = embiam.NewEntity(entityTokens[i])
+		newEntity, err = embiam.NewEntity(entityTokens[i])
 		if err != nil {
 			log.Fatalln(err)
 		}
-		fmt.Printf("New entity created successfully\n  Nick      %s\n", entity.Nick)
-		fmt.Printf("  Password  %s\n  Hash      %s\n", password, entity.PasswordHash)
-		fmt.Printf("  Secret    %s\n  Hash      %s\n\n", secret, entity.SecretHash)
+		fmt.Printf("New entity created successfully\n  Nick      %s\n", newEntity.Nick)
+		fmt.Printf("  Password  %s\n  Hash      %s\n", newEntity.Password, newEntity.PasswordHash)
+		fmt.Printf("  Secret    %s\n  Hash      %s\n\n", newEntity.Secret, newEntity.SecretHash)
 	}
 
 	/*
@@ -51,11 +49,11 @@ func main() {
 		from nick and password
 	*/
 	// provide nick and password and get identity token back
-	identityToken, err := embiam.CheckIdentity(entity.Nick, password+"+", "localhost")
+	identityToken, err := embiam.CheckIdentity(newEntity.Nick, newEntity.Password, "localhost")
 	if err != nil {
 		log.Fatalln(err)
 	}
-	fmt.Printf("Identity of %s was validated. The identity token %s was provided\n\n", entity.Nick, identityToken.Token)
+	fmt.Printf("Identity of %s was validated. The identity token %s was provided\n\n", newEntity.Nick, identityToken.Token)
 	// receive an identity token to use later (without credentials)
 
 	// With the provided identity token, the user can e.g. call APIs

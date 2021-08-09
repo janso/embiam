@@ -180,49 +180,80 @@ type Entity struct {
 	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
 }
 
+// NewEntity contains all fields of Entity but also the password and the secret (not only the hash)
+type NewEntityStruct struct {
+	Nick                 string    `json:"nick"`
+	Password             string    `json:"password"`
+	Secret               string    `json:"secret"`
+	PasswordHash         string    `json:"passwordHash"`
+	SecretHash           string    `json:"secretHash"`
+	Active               bool      `json:"active"`
+	WrongPasswordCounter int       `json:"WrongPasswordCounter"`
+	LastSignInAttempt    time.Time `json:"lastSignInAttempt"`
+	LastSignIn           time.Time `json:"lastSignIn"`
+	CreateTimeStamp      time.Time `json:"createTimeStamp"`
+	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
+}
+
 // NewEntity creates a new entity using an entityToken
-func NewEntity(entityToken string) (entity Entity, password, secret string, err error) {
+func NewEntity(entityToken string) (newEntity NewEntityStruct, err error) {
 	// prepare new entity
-	e := Entity{}
+	ne := NewEntityStruct{}
 
 	// check entity token
 	et, err := Db.ReadEntityToken(entityToken)
 	if err != nil {
-		return e, "", "", err
+		return ne, err
 	}
 	if et.ValidUntil.Before(time.Now()) {
-		return e, "", "", errors.New("validity of entity token expired")
+		return ne, errors.New("validity of entity token expired")
 	}
 
 	// create entity with password and secret
-	newPassword := GeneratePassword(16)
-	newSecret := GeneratePassword(64)
-	e.PasswordHash = Hash(password)
-	e.SecretHash = Hash(secret)
-	e.Active = true
-	e.CreateTimeStamp = time.Now().UTC()
+	ne.Password = GeneratePassword(16)
+	ne.Secret = GeneratePassword(64)
+	ne.PasswordHash = Hash(ne.Password)
+	ne.SecretHash = Hash(ne.Secret)
+	ne.Active = true
+	ne.CreateTimeStamp = time.Now().UTC()
 
 	// generate a unique nick
 	for {
-		e.Nick = GenerateNick()
-		if !Db.EntityExists(e.Nick) {
+		ne.Nick = GenerateNick()
+		if !Db.EntityExists(ne.Nick) {
 			break
 		}
 	}
 
 	// save new entity
+	e := ne.ToEntity()
 	err = Db.SaveEntity(&e)
 	if err != nil {
-		return Entity{}, "", "", err
+		return NewEntityStruct{}, err
 	}
 
 	// delete entity token
 	err = et.Delete()
 	if err != nil {
-		return Entity{}, "", "", err
+		return NewEntityStruct{}, err
 	}
 
-	return e, newPassword, newSecret, nil
+	return ne, nil
+}
+
+// ToEntity converts a NewEntityStruct to Entity
+func (ne *NewEntityStruct) ToEntity() Entity {
+	return Entity{
+		Nick:                 ne.Nick,
+		PasswordHash:         ne.PasswordHash,
+		SecretHash:           ne.SecretHash,
+		Active:               ne.Active,
+		WrongPasswordCounter: ne.WrongPasswordCounter,
+		LastSignInAttempt:    ne.LastSignInAttempt,
+		LastSignIn:           ne.LastSignIn,
+		CreateTimeStamp:      ne.CreateTimeStamp,
+		UpdateTimeStamp:      ne.UpdateTimeStamp,
+	}
 }
 
 /********************************************************************

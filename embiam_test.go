@@ -140,11 +140,10 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 	}
 
 	// 2. use entity tokens to generate real, usable entities
-	entity := Entity{}
-	password := ""
+	newEntity := NewEntityStruct{}
 	var err error
 	for i := 0; i < ENTITY_COUNT; i++ {
-		entity, password, _, err = NewEntity(entityTokens[i])
+		newEntity, err = NewEntity(entityTokens[i])
 		if err != nil {
 			t.Errorf("NewEntity(entityTokens[i]) returned error %s; want new entity without error\n", err)
 		}
@@ -179,7 +178,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 		with nick and password
 	*/
 	// provide nick and password and get identity token back
-	identityToken, err := CheckIdentity(entity.Nick, password, TEST_HOST)
+	identityToken, err := CheckIdentity(newEntity.Nick, newEntity.Password, TEST_HOST)
 	if err != nil {
 		t.Errorf("CheckIdentity(entity.Nick, password, TEST_HOST) returned error %s; want identity token without error\n", err)
 	}
@@ -200,14 +199,14 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 		this value contains the (no crypted) credetials and can be used directly.
 	*/
 	// simulate authValue
-	authValue := "embiam " + base64.StdEncoding.EncodeToString([]byte(entity.Nick+":"+password))
+	authValue := "embiam " + base64.StdEncoding.EncodeToString([]byte(newEntity.Nick+":"+newEntity.Password))
 	// get identityToken with authValue
 	identityToken, returnNick, err := CheckAuthIdentity(authValue, TEST_HOST)
 	if err != nil {
 		t.Errorf("CheckAuthIdentity(authValue, TEST_HOST) with authValue %s returned error %s; want identity token without error\n", authValue, err)
 	}
-	if returnNick != entity.Nick {
-		t.Errorf("IsAuthIdentityTokenValid(authValue, TEST_HOST) returned false nick %s; want correct nick %s\n", returnNick, entity.Nick)
+	if returnNick != newEntity.Nick {
+		t.Errorf("IsAuthIdentityTokenValid(authValue, TEST_HOST) returned false nick %s; want correct nick %s\n", returnNick, newEntity.Nick)
 	}
 
 	// check identityToken from Authorizantion header
@@ -223,13 +222,13 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 		SIGN IN WITH WRONG CREDETIALS
 		After a sign in with wrong credentials the number of false attempts is increased. Also the time of the wrong attempt is logged.
 	*/
-	_, err = CheckIdentity(entity.Nick, `Wr0ngPassWord`, TEST_HOST)
+	_, err = CheckIdentity(newEntity.Nick, `Wr0ngPassWord`, TEST_HOST)
 	if err == nil {
 		t.Errorf("CheckIdentity(entity.Nick, `Wr0ngPassWord`, TEST_HOST) returned NO error; want error\n")
 	}
-	e, err := Db.ReadEntityByNick(entity.Nick)
+	e, err := Db.ReadEntityByNick(newEntity.Nick)
 	if err != nil {
-		t.Errorf("Db.ReadEntityByNick(entity.Nick) for %s returned error %s; want entity without error\n", entity.Nick, err)
+		t.Errorf("Db.ReadEntityByNick(entity.Nick) for %s returned error %s; want entity without error\n", newEntity.Nick, err)
 	}
 	if e.WrongPasswordCounter != 1 {
 		t.Errorf("e.WrongPasswordCounter = %d; want 1", e.WrongPasswordCounter)
@@ -242,14 +241,14 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 		The entity is locked by setting Entity.Active to false.
 	*/
 	for i := 0; i <= Configuration.MaxSignInAttempts; i++ {
-		_, err = CheckIdentity(entity.Nick, `Wr0ngPassWord`, TEST_HOST)
+		_, err = CheckIdentity(newEntity.Nick, `Wr0ngPassWord`, TEST_HOST)
 		if err == nil {
 			t.Errorf("CheckIdentity(entity.Nick, `Wr0ngPassWord`, TEST_HOST) returned NO error; want error")
 		}
 	}
-	e, err = Db.ReadEntityByNick(entity.Nick)
+	e, err = Db.ReadEntityByNick(newEntity.Nick)
 	if err != nil {
-		t.Errorf("Db.ReadEntityByNick(entity.Nick) for %s returned error %s; want entity without error", entity.Nick, err)
+		t.Errorf("Db.ReadEntityByNick(entity.Nick) for %s returned error %s; want entity without error", newEntity.Nick, err)
 	}
 	if e.Active {
 		t.Errorf("e.Active = true; want false")
