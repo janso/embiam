@@ -181,7 +181,7 @@ type Entity struct {
 }
 
 // NewEntity creates a new entity using an entityToken
-func NewEntity(entityToken string) (Entity, string, string, error) {
+func NewEntity(entityToken string) (entity Entity, password, secret string, err error) {
 	// prepare new entity
 	e := Entity{}
 
@@ -195,8 +195,8 @@ func NewEntity(entityToken string) (Entity, string, string, error) {
 	}
 
 	// create entity with password and secret
-	password := GeneratePassword(16)
-	secret := GeneratePassword(64)
+	newPassword := GeneratePassword(16)
+	newSecret := GeneratePassword(64)
 	e.PasswordHash = Hash(password)
 	e.SecretHash = Hash(secret)
 	e.Active = true
@@ -222,7 +222,7 @@ func NewEntity(entityToken string) (Entity, string, string, error) {
 		return Entity{}, "", "", err
 	}
 
-	return e, password, secret, nil
+	return e, newPassword, newSecret, nil
 }
 
 /********************************************************************
