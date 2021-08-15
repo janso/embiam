@@ -24,18 +24,18 @@ func main() {
 	*/
 	// 1. generate entity tokens (they are provided by the adminitrator and used by the user to generate the entity)
 	entityTokenCount := 3
-	entityTokens := make([]string, 0, entityTokenCount)
+	entityTokens := make([]embiam.EntityToken, 0, entityTokenCount)
 	for i := 0; i < 3; i++ {
 		entityToken := embiam.NewEntityToken()
 		entityToken.Save()
-		entityTokens = append(entityTokens, entityToken.Token)
+		entityTokens = append(entityTokens, entityToken)
 	}
 
 	// 2. use entity tokens to generate real, usable entities
 	newEntity := embiam.NewEntityStruct{}
 	var err error
 	for i := 0; i < 3; i++ {
-		newEntity, err = embiam.NewEntity(entityTokens[i])
+		newEntity, err = embiam.NewEntity(entityTokens[i].Token, entityTokens[i].Pin)
 		if err != nil {
 			log.Fatalln(err)
 		}

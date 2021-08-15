@@ -195,8 +195,8 @@ type NewEntityStruct struct {
 	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
 }
 
-// NewEntity creates a new entity using an entityToken
-func NewEntity(entityToken string) (newEntity NewEntityStruct, err error) {
+// NewEntity creates a new entity using an entityToken and PIN
+func NewEntity(entityToken, pin string) (newEntity NewEntityStruct, err error) {
 	// prepare new entity
 	ne := NewEntityStruct{}
 
@@ -205,8 +205,13 @@ func NewEntity(entityToken string) (newEntity NewEntityStruct, err error) {
 	if err != nil {
 		return ne, err
 	}
+	// check validity
 	if et.ValidUntil.Before(time.Now()) {
 		return ne, errors.New("validity of entity token expired")
+	}
+	// check pin
+	if et.Pin != pin {
+		return ne, errors.New("invalid PIN")
 	}
 
 	// create entity with password and secret
@@ -266,6 +271,7 @@ func (ne *NewEntityStruct) ToEntity() Entity {
 ********************************************************************/
 type EntityToken struct {
 	Token      string    `json:"token"`
+	Pin        string    `json:"pin"`
 	ValidUntil time.Time `json:"validUntil"`
 }
 
@@ -276,6 +282,7 @@ func NewEntityToken() EntityToken {
 	validUntil := time.Now().UTC().Add(time.Hour * time.Duration(hours))
 	return EntityToken{
 		Token:      GenerateEntityToken(),
+		Pin:        GeneratePin(),
 		ValidUntil: validUntil,
 	}
 }
@@ -412,6 +419,16 @@ func GenerateNick() string {
 		nick[i] = nickChars[rand.Intn(len(nickChars))]
 	}
 	return string(nick)
+}
+
+// GeneratePin generates a PIN
+func GeneratePin() string {
+	const pinLength = 6
+	pin := make([]byte, pinLength)
+	for i := range pin {
+		pin[i] = nickChars[rand.Intn(len(nickChars))]
+	}
+	return string(pin)
 }
 
 // GeneratePassword generates a password

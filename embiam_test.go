@@ -132,20 +132,20 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 	   2. the user creates his personal entity using the entity token
 	*/
 	// 1. generate entity tokens (they are provided by the adminitrator and used by the user to generate the entity)
-	entityTokens := make([]string, 0, NICK_COUNT)
+	entityTokens := make([]EntityToken, 0, NICK_COUNT)
 	for i := 0; i < ENTITY_COUNT; i++ {
 		entityToken := NewEntityToken()
 		entityToken.Save()
-		entityTokens = append(entityTokens, entityToken.Token)
+		entityTokens = append(entityTokens, entityToken)
 	}
 
 	// 2. use entity tokens to generate real, usable entities
 	newEntity := NewEntityStruct{}
 	var err error
 	for i := 0; i < ENTITY_COUNT; i++ {
-		newEntity, err = NewEntity(entityTokens[i])
+		newEntity, err = NewEntity(entityTokens[i].Token, entityTokens[i].Pin)
 		if err != nil {
-			t.Errorf("NewEntity(entityTokens[i]) returned error %s; want new entity without error\n", err)
+			t.Errorf("NewEntity(...) returned error %s; want new entity without error\n", err)
 		}
 	}
 
