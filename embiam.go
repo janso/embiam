@@ -5,6 +5,7 @@ package embiam
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"math/rand"
 	"strings"
@@ -16,6 +17,7 @@ import (
 var Configuration ConfigurationStruct
 
 type ConfigurationStruct struct {
+	ServerId                     string `json:"serverId"`
 	Port                         string `json:"port"`
 	EntityTokenValidityHours     int    `json:"entityTokenValidityHours"`
 	IdentityTokenValiditySeconds int    `json:"identityTokenValiditySeconds"`
@@ -28,7 +30,10 @@ func Initialize(aDb DbInterface) {
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	// set default configuration
+	sid := ServerId{}
+	sid.New()
 	Configuration = ConfigurationStruct{
+		ServerId:                     sid.String(),
 		Port:                         "8242",
 		EntityTokenValidityHours:     168,
 		IdentityTokenValiditySeconds: 720,
@@ -431,4 +436,26 @@ func GenerateEntityToken() string {
 		token[i] = nickChars[rand.Intn(len(nickChars))]
 	}
 	return string(token)
+}
+
+// random 128-bit Id of the server
+type ServerId [2]uint64
+
+// New generates a new ServerId
+func (id *ServerId) New() {
+	id[0] = rand.Uint64()
+	id[1] = rand.Uint64()
+}
+
+// Stringer for ServerId
+func (id *ServerId) String() string {
+	a := id[0] & 0xffff
+	b := id[0] >> 16 & 0xffff
+	c := id[0] >> 32 & 0xffff
+	d := id[0] >> 48 & 0xffff
+	e := id[1] & 0xffff
+	f := id[1] >> 16 & 0xffff
+	g := id[1] >> 32 & 0xffff
+	h := id[1] >> 48 & 0xffff
+	return fmt.Sprintf("%04x.%04x.%04x.%04x-%04x.%04x.%04x.%04x", h, g, f, e, d, c, b, a)
 }
