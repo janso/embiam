@@ -220,7 +220,7 @@ func NewEntity(entityToken, pin string) (newEntity NewEntityStruct, err error) {
 	}
 
 	// create entity with password and secret
-	ne.Password = GeneratePassword(16)
+	ne.Password = GeneratePassword(32)
 	ne.Secret = GeneratePassword(64)
 	ne.PasswordHash = Hash(ne.Password)
 	ne.SecretHash = Hash(ne.Secret)
