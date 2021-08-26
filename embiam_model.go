@@ -133,9 +133,17 @@ func (m DbFile) ReadEntityList() (nicklist []string, e error) {
 	}
 	nicklist = make([]string, 0, len(files))
 	for _, file := range files {
-		if !file.IsDir() {
-			nicklist = append(nicklist, file.Name())
+		if file.IsDir() {
+			continue
 		}
+		// ToDo: Improve and ignore hidden files
+		filename := file.Name()
+		// ToDo: Improve and check if only allowed characters are in filename
+		if filename[0:1] == "." {
+			continue
+		}
+		nicklist = append(nicklist, filename)
+
 	}
 	return nicklist, nil
 }

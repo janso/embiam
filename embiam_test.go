@@ -149,6 +149,23 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 		}
 	}
 
+	// 3. generate a disturbing file
+	wrongEntity := Entity{
+		Nick:                 ".DS_Store",
+		PasswordHash:         "",
+		SecretHash:           "",
+		Active:               false,
+		WrongPasswordCounter: 0,
+		LastSignInAttempt:    time.Time{},
+		LastSignIn:           time.Time{},
+		CreateTimeStamp:      time.Now().UTC(),
+		UpdateTimeStamp:      time.Time{},
+	}
+	err = Db.SaveEntity(&wrongEntity)
+	if err != nil {
+		t.Errorf("Db.SaveEntity(&wrongEntity) returned error %s; want new entity without error\n", err)
+	}
+
 	/*
 		READ ENTITIES
 	*/
