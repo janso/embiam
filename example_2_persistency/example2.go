@@ -9,12 +9,13 @@ import (
 
 func main() {
 	// Initiallize (using filesystem as database)
-	embiamModel := new(embiam.DbFile)
-	embiam.Initialize(embiamModel)
+	embiamDb := new(embiam.DbFile)
+	embiam.Initialize(embiamDb)
 
 	// clean up db
-	embiamModel.DeleteContentsFromDirectory(embiamModel.EntityFilePath)
-	embiamModel.DeleteContentsFromDirectory(embiamModel.EntityTokenFilePath)
+	embiamDb.DeleteContentsFromDirectory(embiamDb.EntityFilePath)
+	embiam.InitializeDirectory(embiamDb.EntityDeletedFilePath) // recreate directory
+	embiamDb.DeleteContentsFromDirectory(embiamDb.EntityTokenFilePath)
 
 	/*
 	   GENERATE SOME ENTITIES (users)
@@ -60,8 +61,18 @@ func main() {
 	// When an API is called, the client passes the identity token  to the server.
 	// The server checks the identity token
 	if embiam.IsIdentityTokenValid(identityToken.Token, "localhost") {
-		fmt.Printf("Identity token is valid.")
+		fmt.Printf("Identity token is valid.\n\n")
 	} else {
 		log.Fatalln(err)
 	}
+
+	/*
+		DELETE ENTITY
+		The entities are moved to folder deleted in the folder of entities
+	*/
+	err = embiam.Db.DeleteEntity(newEntity.Nick)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Printf("Entity %s successfully deleted\n\n", newEntity.Nick)
 }

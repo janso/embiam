@@ -22,6 +22,7 @@ type DbInterface interface {
 	ReadEntityByNick(nick string) (*Entity, error)
 	EntityExists(nick string) bool
 	SaveEntity(entity *Entity) error
+	DeleteEntity(nick string) error
 	// Entity Tokens
 	SaveEntityToken(entityToken *EntityToken) error
 	ReadEntityToken(tokenoken string) (*EntityToken, error)
@@ -69,6 +70,11 @@ func (m DbTransient) SaveEntity(e *Entity) error {
 	return nil
 }
 
+func (m DbTransient) DeleteEntity(nick string) error {
+	delete(m.entityStore, nick)
+	return nil
+}
+
 func (m DbTransient) SaveEntityToken(et *EntityToken) error {
 	m.entityTokenStore[et.Token] = *et
 	return nil
@@ -101,10 +107,11 @@ func (m DbTransient) SaveAuthNodes(authNode *[]AuthNodeStruct) error {
 	DbFile - use the filesystem and store json files
 */
 type DbFile struct {
-	EntityFilePath      string
-	EntityTokenFilePath string
-	AuthNodeFilePath    string
-	DBPath              string
+	EntityFilePath        string
+	EntityDeletedFilePath string
+	EntityTokenFilePath   string
+	AuthNodeFilePath      string
+	DBPath                string
 }
 
 func (m *DbFile) Initialize() {
@@ -117,11 +124,13 @@ func (m *DbFile) Initialize() {
 	// set paths
 	m.DBPath = executableDirectory + `/embiamDb/`
 	m.EntityFilePath = m.DBPath + `entity/`
+	m.EntityDeletedFilePath = m.DBPath + `entity/deleted/`
 	m.EntityTokenFilePath = m.DBPath + `entityToken/`
 	m.AuthNodeFilePath = m.DBPath + `authNode/`
 
 	// create paths
 	InitializeDirectory(m.EntityFilePath)
+	InitializeDirectory(m.EntityDeletedFilePath)
 	InitializeDirectory(m.EntityTokenFilePath)
 	InitializeDirectory(m.AuthNodeFilePath)
 }
@@ -175,6 +184,16 @@ func (m DbFile) SaveEntity(e *Entity) error {
 		return err
 	}
 	err = ioutil.WriteFile(filepath, jsonbytes, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m DbFile) DeleteEntity(nick string) error {
+	oldFilepath := m.EntityFilePath + nick
+	newFilepath := m.EntityDeletedFilePath + nick
+	err := os.Rename(oldFilepath, newFilepath)
 	if err != nil {
 		return err
 	}
@@ -274,7 +293,7 @@ func InitializeDirectory(folderPath string) error {
 	}
 	err = os.MkdirAll(folderPath, os.ModePerm)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	return nil
 }

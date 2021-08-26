@@ -101,6 +101,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 
 	// clean up db
 	db.DeleteContentsFromDirectory(db.EntityFilePath)
+	InitializeDirectory(db.EntityDeletedFilePath) // recreate directory
 	db.DeleteContentsFromDirectory(db.EntityTokenFilePath)
 
 	// Generate test entities
@@ -272,5 +273,14 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 	}
 	if e.WrongPasswordCounter != Configuration.MaxSignInAttempts+1 {
 		t.Errorf("e.WrongPasswordCounter = %d; want %d", e.WrongPasswordCounter, Configuration.MaxSignInAttempts+1)
+	}
+
+	/*
+		DELETE ENTITY
+		The entities are moved to folder deleted in the folder of entities
+	*/
+	err = Db.DeleteEntity(newEntity.Nick)
+	if err != nil {
+		t.Errorf("Db.DeleteEntity(newEntity.Nick) for %s returned error %s; want delete without error", newEntity.Nick, err)
 	}
 }
