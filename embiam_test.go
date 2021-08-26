@@ -178,17 +178,26 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 
 	// 2. read each individual entity using the list
 	entityList := make([]Entity, 0, len(nicklist))
+	publicEntityList := make([]PublicEntity, 0, len(nicklist))
 	for _, nick := range nicklist {
 		entity, err := db.ReadEntityByNick(nick)
 		if err != nil {
 			t.Errorf("model.ReadEntityByNick(nick) returned error %s for nick %s; want entity for nick\n", err, nick)
 		}
+		publicEntity, err := db.ReadPublicEntityByNick(nick)
+		if err != nil {
+			t.Errorf("model.ReadPublicEntityByNick(nick) returned error %s for nick %s; want entity for nick\n", err, nick)
+		}
 		entityList = append(entityList, *entity)
+		publicEntityList = append(publicEntityList, *publicEntity)
 	}
 
 	// 3. check result
 	if len(entityList) != len(nicklist) {
 		t.Errorf("Number of read entities is not equal to the number of requests entities; want same number\n")
+	}
+	if len(entityList) != len(publicEntityList) {
+		t.Errorf("Number of read entities is not equal for entities and public entities; want same number\n")
 	}
 
 	/*

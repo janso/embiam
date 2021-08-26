@@ -172,6 +172,17 @@ func IsIdentityTokenValid(token string, validFor string) bool {
 	multiple unsuccessful password entries.
 *********************************************************************/
 
+// PublicEntity describes a user or a device (without hashes)
+type PublicEntity struct {
+	Nick                 string    `json:"nick"`
+	Active               bool      `json:"active"`
+	WrongPasswordCounter int       `json:"WrongPasswordCounter"`
+	LastSignInAttempt    time.Time `json:"lastSignInAttempt"`
+	LastSignIn           time.Time `json:"lastSignIn"`
+	CreateTimeStamp      time.Time `json:"createTimeStamp"`
+	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
+}
+
 // Entity describes a user or a device
 type Entity struct {
 	Nick                 string    `json:"nick"`
@@ -249,6 +260,19 @@ func NewEntity(entityToken, pin string) (newEntity NewEntityStruct, err error) {
 	}
 
 	return ne, nil
+}
+
+// ToPublicEntity converts an EntityStruct to PublicEntity
+func (e *Entity) ToPublicEntity() PublicEntity {
+	return PublicEntity{
+		Nick:                 e.Nick,
+		Active:               e.Active,
+		WrongPasswordCounter: e.WrongPasswordCounter,
+		LastSignInAttempt:    e.LastSignInAttempt,
+		LastSignIn:           e.LastSignIn,
+		CreateTimeStamp:      e.CreateTimeStamp,
+		UpdateTimeStamp:      e.UpdateTimeStamp,
+	}
 }
 
 // ToEntity converts a NewEntityStruct to Entity

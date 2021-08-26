@@ -67,6 +67,25 @@ func main() {
 	}
 
 	/*
+		READ ENTITIES
+	*/
+	entity, err := embiam.Db.ReadEntityByNick(newEntity.Nick)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	publicEntity, err := embiam.Db.ReadPublicEntityByNick(newEntity.Nick)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if entity.Nick != publicEntity.Nick {
+		log.Fatalln(err)
+	}
+	if entity.CreateTimeStamp != publicEntity.CreateTimeStamp {
+		log.Fatalln(err)
+	}
+	fmt.Printf("Entity %s successfully read\n\n", newEntity.Nick)
+
+	/*
 		DELETE ENTITY
 		The entities are moved to folder deleted in the folder of entities
 	*/

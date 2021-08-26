@@ -20,6 +20,7 @@ type DbInterface interface {
 	// Entity
 	ReadEntityList() (nicklist []string, e error)
 	ReadEntityByNick(nick string) (*Entity, error)
+	ReadPublicEntityByNick(nick string) (*PublicEntity, error)
 	EntityExists(nick string) bool
 	SaveEntity(entity *Entity) error
 	DeleteEntity(nick string) error
@@ -58,6 +59,15 @@ func (m DbTransient) ReadEntityByNick(nick string) (*Entity, error) {
 		return &e, nil
 	}
 	return nil, errors.New("entity not found")
+}
+
+func (m DbTransient) ReadPublicEntityByNick(nick string) (*PublicEntity, error) {
+	entity, err := m.ReadEntityByNick(nick)
+	if err != nil {
+		return nil, err
+	}
+	publicEntity := entity.ToPublicEntity()
+	return &publicEntity, nil
 }
 
 func (m DbTransient) EntityExists(nick string) bool {
@@ -169,6 +179,15 @@ func (m DbFile) ReadEntityByNick(nick string) (*Entity, error) {
 		return nil, fmt.Errorf("error '%s' unmarshalling nick %s", err.Error(), nick)
 	}
 	return &entity, nil
+}
+
+func (m DbFile) ReadPublicEntityByNick(nick string) (*PublicEntity, error) {
+	entity, err := m.ReadEntityByNick(nick)
+	if err != nil {
+		return nil, err
+	}
+	publicEntity := entity.ToPublicEntity()
+	return &publicEntity, nil
 }
 
 func (m DbFile) EntityExists(nick string) bool {
