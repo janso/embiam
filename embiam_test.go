@@ -149,7 +149,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 		}
 	}
 
-	// 3. generate a disturbing file
+	// 3. generate a disturbing file (that is not a nick)
 	wrongEntity := Entity{
 		Nick:                 ".DS_Store",
 		PasswordHash:         "",
