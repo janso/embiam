@@ -176,7 +176,7 @@ func IsIdentityTokenValid(token string, validFor string) bool {
 type PublicEntity struct {
 	Nick                 string    `json:"nick"`
 	Active               bool      `json:"active"`
-	WrongPasswordCounter int       `json:"WrongPasswordCounter"`
+	WrongPasswordCounter int       `json:"wrongPasswordCounter"`
 	LastSignInAttempt    time.Time `json:"lastSignInAttempt"`
 	LastSignIn           time.Time `json:"lastSignIn"`
 	CreateTimeStamp      time.Time `json:"createTimeStamp"`
@@ -189,7 +189,7 @@ type Entity struct {
 	PasswordHash         string    `json:"passwordHash"`
 	SecretHash           string    `json:"secretHash"`
 	Active               bool      `json:"active"`
-	WrongPasswordCounter int       `json:"WrongPasswordCounter"`
+	WrongPasswordCounter int       `json:"wrongPasswordCounter"`
 	LastSignInAttempt    time.Time `json:"lastSignInAttempt"`
 	LastSignIn           time.Time `json:"lastSignIn"`
 	CreateTimeStamp      time.Time `json:"createTimeStamp"`
@@ -204,7 +204,7 @@ type NewEntityStruct struct {
 	PasswordHash         string    `json:"passwordHash"`
 	SecretHash           string    `json:"secretHash"`
 	Active               bool      `json:"active"`
-	WrongPasswordCounter int       `json:"WrongPasswordCounter"`
+	WrongPasswordCounter int       `json:"wrongPasswordCounter"`
 	LastSignInAttempt    time.Time `json:"lastSignInAttempt"`
 	LastSignIn           time.Time `json:"lastSignIn"`
 	CreateTimeStamp      time.Time `json:"createTimeStamp"`
