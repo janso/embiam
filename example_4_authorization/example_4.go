@@ -12,18 +12,18 @@ func main() {
 	embiam.Initialize(db)
 
 	// create example roleMap
-	roleMap := embiam.RoleMap{
+	roleMap := embiam.RoleCacheMap{
 		"embiam.admin": {
 			Authorization: []embiam.AuthorizationStruct{{
 				Ressource: "embiam.*",
-				Activity:  []embiam.ActivityType{"*"},
+				Action:    embiam.ActionMap{embiam.ActionAsteriks: {}},
 			}},
 			ContainedRole: []embiam.RoleIdType{},
 		},
 		"embiam.reader": {
 			Authorization: []embiam.AuthorizationStruct{{
 				Ressource: "embiam.*",
-				Activity:  []embiam.ActivityType{"read"},
+				Action:    embiam.ActionMap{"read": {}},
 			}},
 			ContainedRole: []embiam.RoleIdType{},
 		},

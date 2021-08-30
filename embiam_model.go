@@ -31,8 +31,8 @@ type DbInterface interface {
 	DeleteEntityToken(token string) error
 
 	// Roles
-	ReadRoles() (roleMap RoleMap, err error)
-	SaveRoles(roleMap RoleMap) error
+	ReadRoles() (roleMap RoleCacheMap, err error)
+	SaveRoles(roleMap RoleCacheMap) error
 }
 
 /*
@@ -105,12 +105,12 @@ func (m DbTransient) DeleteEntityToken(token string) error {
 	return nil
 }
 
-func (m DbTransient) ReadRoles() (roleMap RoleMap, err error) {
+func (m DbTransient) ReadRoles() (roleMap RoleCacheMap, err error) {
 	// ToDo: Implement
 	return nil, nil
 }
 
-func (m DbTransient) SaveRoles(authNode RoleMap) error {
+func (m DbTransient) SaveRoles(authNode RoleCacheMap) error {
 	// ToDo: Implement
 	return nil
 }
@@ -280,8 +280,8 @@ func (m DbFile) DeleteContentsFromDirectory(dir string) error {
 	return nil
 }
 
-func (m DbFile) ReadRoles() (roleMap RoleMap, err error) {
-	roleMap = make(RoleMap)
+func (m DbFile) ReadRoles() (roleMap RoleCacheMap, err error) {
+	roleMap = make(RoleCacheMap)
 	filepath := m.RolePath + m.RoleFilename
 	jsonString, err := ioutil.ReadFile(filepath)
 	if err != nil {
@@ -294,7 +294,7 @@ func (m DbFile) ReadRoles() (roleMap RoleMap, err error) {
 	return roleMap, nil
 }
 
-func (m DbFile) SaveRoles(roleMap RoleMap) error {
+func (m DbFile) SaveRoles(roleMap RoleCacheMap) error {
 	jsonbytes, err := json.MarshalIndent(roleMap, "", "\t")
 	if err != nil {
 		return err

@@ -5,18 +5,92 @@ import (
 	"log"
 )
 
+// initializeAuthorization initializes the authorization sub system
+func initializeAuthorizations() {
+	// load roles
+	roles, _ := Db.ReadRoles()
+	if len(roles) == 0 {
+		log.Println("No roles loaded. Using minimal default roles")
+		// create example roleMap
+		roles = RoleCacheMap{
+			"embiam.admin": {
+				Authorization: []AuthorizationStruct{{
+					Ressource: "embiam.*",
+					Action:    ActionMap{ActionAsteriks: {}},
+				}},
+				ContainedRole: []RoleIdType{},
+			},
+		}
+	}
+	// initialize authorization cache
+	authorizationCache = AuthorizationCacheMap{}
+}
+
+/********************************************************************
+	RESSOURCE
+
+	A ressource in embiam is a thing that is relevant for
+	authorization checks
+
+
+	ACTION
+
+	An Action is something that can be done with a ressource and
+	shall be checked in terms of authorization
+
+
+	AUTHORIZTION
+
+	An authorization contains a RESSOURCE and a set of action for
+	the ressource
+
+*********************************************************************/
+
 type (
 	// RessourceType - a ressource is a thing that is relevant for authorization checks
 	RessourceType string
-	// ActivityType - an activity can be performed on a recource and is relevant for authority checks
-	ActivityType string
-	// ActivitySlice is a set of activities
-	ActivitySlice []ActivityType
+
+	// ActionType - an activity can be performed on a recource and is relevant for authority checks
+	ActionType string
+
+	// ActionMap is a set of activities
+	ActionMap map[ActionType]struct{}
+
 	// AuthorizationStruct describes a ressource together with actitivies
 	AuthorizationStruct struct {
 		Ressource RessourceType `json:"ressource"`
-		Activity  ActivitySlice `json:"activity"`
+		Action    ActionMap     `json:"action"`
 	}
+)
+
+const ActionAsteriks ActionType = "*"
+
+// contains checks if resA is equal to resB or resA has a * at the end and the prefixed of A and B are equal
+func (resA RessourceType) contains(resB RessourceType) bool {
+	if resA == resB {
+		return true
+	} else {
+		// case resA="embiam.*" and resB="embiam.entity"
+		if len(resA) == 0 {
+			return false
+		}
+		l := len(resA) - 1
+		if len(resB) < l {
+			return false
+		}
+		if resA[l:] == "*" {
+			return resA[0:l] == resB[0:l]
+		}
+		return false
+	}
+}
+
+/********************************************************************
+	ROLE CACHE
+
+	ToDo...
+*********************************************************************/
+type (
 	// RoleIdType - a role is a collection of Authorization with an Id
 	// it can also contain other roles and forms a hierarchical structure of authorizations
 	RoleIdType string
@@ -25,21 +99,15 @@ type (
 		Authorization []AuthorizationStruct `json:"authorization"`
 		ContainedRole []RoleIdType          `json:"containedRoles"`
 	}
-	// RoleMap combines the Id of the role with the role's body
-	RoleMap map[RoleIdType]RoleBodyStruct
-
-	// NickAuthorizationMap contains a Authorizations for nicks
-	NickAuthorizationMap map[string][]AuthorizationStruct
+	// RoleCacheMap combines the Id of the role with the role's body
+	RoleCacheMap map[RoleIdType]RoleBodyStruct
 )
 
-/********************************************************************
-	ROLE
-
-	ToDo...
-*********************************************************************/
+// all available roleCache
+var roleCache RoleCacheMap
 
 // GetAuthorizationsForNick collects all authorizations from roles assigned to nick
-func (r *RoleMap) GetAuthorizationsForEntity(entity *Entity) ([]AuthorizationStruct, error) {
+func (r *RoleCacheMap) GetAuthorizationsForEntity(entity *Entity) ([]AuthorizationStruct, error) {
 	// collect authorizations from roles
 	authorizations := []AuthorizationStruct{}
 	for _, roleId := range entity.Roles {
@@ -58,10 +126,10 @@ func (r *RoleMap) GetAuthorizationsForEntity(entity *Entity) ([]AuthorizationStr
 // direct authorizations that are part of the role itself and indirect authorizations
 // from embedded roles
 // If roleId doesn't exist an error is returned
-func (r RoleMap) GetAuthorizationsFromRole(roleId RoleIdType) ([]AuthorizationStruct, error) {
+func (r RoleCacheMap) GetAuthorizationsFromRole(roleId RoleIdType) ([]AuthorizationStruct, error) {
 	roleBody, ok := r[roleId]
 	if !ok {
-		return nil, fmt.Errorf("Role %s doesn't exists\n", roleId)
+		return nil, fmt.Errorf("role %s doesn't exists", roleId)
 	}
 	authorizations := []AuthorizationStruct{}
 	// collect direct authorizations from role
@@ -82,38 +150,52 @@ func (r RoleMap) GetAuthorizationsFromRole(roleId RoleIdType) ([]AuthorizationSt
 }
 
 /********************************************************************
-	AUTHORIZATIONS
+	AUTHORIZATION CACHE
 
 	ToDo...
 *********************************************************************/
-var nickAuthorizations NickAuthorizationMap // authorizations of a nick
+type (
+	// AuthorizationCacheMap contains a Authorizations for nicks
+	AuthorizationCacheMap map[string][]AuthorizationStruct
+)
+
+var authorizationCache AuthorizationCacheMap // authorizations of a nick
 // ToDo: Add livetime managemnt - don't keep data of nick for ever
 
-func BufferAuthorizationsForEntity(entity *Entity) error {
-	authorizations, err := roles.GetAuthorizationsForEntity(entity)
+// AddNicksAuthorizationsToCache adds the authorizations of a nick to the authorization cache
+func AddNicksAuthorizationsToCache(entity *Entity) error {
+	authorizations, err := roleCache.GetAuthorizationsForEntity(entity)
 	if err != nil {
 		return err
 	}
-	nickAuthorizations[entity.Nick] = authorizations
+	authorizationCache[entity.Nick] = authorizations
 	return nil
 }
 
 // IsAuthorized checks if the entity, provided through nick, is authorizied for action on ressource
-func IsNickAuthorized(nick, ressource, action string) bool {
-	// ToDo: implement
+func (ac AuthorizationCacheMap) IsNickAuthorized(nick string, ressource RessourceType, action ActionType) bool {
+	// get all authorizations of nick
+	nickAuths, ok := ac[nick]
+	if !ok {
+		return false
+	}
+	// iterate nick's authorizations
+	// ToDo: O(n) --> O(1) || O(log n)
+	for _, auth := range nickAuths {
+		// check if the authorization's ressources contains the requested ressource
+		if auth.Ressource.contains(ressource) {
+			// check action
+			_, ok := auth.Action[action]
+			if ok {
+				// nick has authorization for ressource and for action
+				return true
+			}
+			_, ok = auth.Action[ActionAsteriks]
+			if ok {
+				// nick has authorization for ressource and for action *
+				return true
+			}
+		}
+	}
 	return false
-}
-
-// list of all available roles
-var roles RoleMap
-
-func initializeAuthorizations() {
-	// load roles
-	roles, err := Db.ReadRoles()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	if len(roles) == 0 {
-		log.Printf("No roles loaded. Should have a minimum set of roles") // ToDo: remove
-	}
 }

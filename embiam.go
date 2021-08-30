@@ -128,11 +128,11 @@ func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error)
 	seconds := Configuration.IdentityTokenValiditySeconds // get number of minutes from config
 	identityToken.ValidUntil = time.Now().UTC().Add(time.Second * time.Duration(seconds))
 
-	// save identity token, validity and remove address in cache
+	// add identity token to cache
 	identityTokenCache.add(identityToken.Token, identityToken.ValidUntil, validFor)
 
 	// prepare authorizations for nick
-	err = BufferAuthorizationsForEntity(entity)
+	err = AddNicksAuthorizationsToCache(entity)
 	if err != nil {
 		return identityToken, err
 	}
@@ -349,28 +349,31 @@ func (et EntityToken) Delete() error {
 	instead of the credentials (nick and password).
 	So an identity token completely different than the entity token.
 ********************************************************************/
-var identityTokenCache identityTokenCacheType
 
 // identityTokenCacheItemStruct describes on record of the internal list of provided identity tokens
-type identityTokenCacheItemStruct struct {
-	Token      string
-	ValidUntil time.Time
-	ValidFor   string
-}
+type (
+	identityTokenCacheItemStruct struct {
+		Token      string
+		ValidUntil time.Time
+		ValidFor   string
+	}
 
-// identityTokenCacheItemSlice describes the internal list of provided identity tokens
-type identityTokenCacheItemSlice []identityTokenCacheItemStruct
+	// identityTokenCacheItemSlice describes the internal list of provided identity tokens
+	identityTokenCacheItemSlice []identityTokenCacheItemStruct
 
-// identityTokenCacheType is the actual type of the cache for identity tokens
-type identityTokenCacheType struct {
-	Cache identityTokenCacheItemSlice
-}
+	// identityTokenCacheType is the actual type of the cache for identity tokens
+	identityTokenCacheType struct {
+		Cache identityTokenCacheItemSlice
+	}
 
-// identityTokenStruct is the type for the identity token send to the client, containing the actual token and validUntil
-type identityTokenStruct struct {
-	Token      string    `json:"token"`
-	ValidUntil time.Time `json:"validUntil"`
-}
+	// identityTokenStruct is the type for the identity token send to the client, containing the actual token and validUntil
+	identityTokenStruct struct {
+		Token      string    `json:"token"`
+		ValidUntil time.Time `json:"validUntil"`
+	}
+)
+
+var identityTokenCache identityTokenCacheType
 
 // add a new token to the identity token cache
 func (itc *identityTokenCacheType) add(token string, validUntil time.Time, validFor string) {
