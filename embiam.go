@@ -129,7 +129,7 @@ func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error)
 	identityToken.ValidUntil = time.Now().UTC().Add(time.Second * time.Duration(seconds))
 
 	// add identity token to cache
-	identityTokenCache.add(identityToken.Token, identityToken.ValidUntil, validFor)
+	identityTokenCache.add(identityToken.Token, identityToken.ValidUntil, validFor, nick)
 
 	// prepare authorizations for nick
 	err = AddNicksAuthorizationsToCache(entity)
@@ -356,6 +356,7 @@ type (
 		Token      string
 		ValidUntil time.Time
 		ValidFor   string
+		Nick       string
 	}
 
 	// identityTokenCacheItemSlice describes the internal list of provided identity tokens
@@ -376,13 +377,14 @@ type (
 var identityTokenCache identityTokenCacheType
 
 // add a new token to the identity token cache
-func (itc *identityTokenCacheType) add(token string, validUntil time.Time, validFor string) {
+func (itc *identityTokenCacheType) add(token string, validUntil time.Time, validFor, nick string) {
 	now := time.Now().UTC()
 	emptyIdentityToken := identityTokenCacheItemStruct{}
 	newIdentityToken := identityTokenCacheItemStruct{
 		Token:      token,
 		ValidUntil: validUntil,
 		ValidFor:   validFor,
+		Nick:       nick,
 	}
 	placed := false
 
@@ -412,7 +414,9 @@ func (itc identityTokenCacheType) isIdentityTokenValid(tokenToTest string, valid
 	now := time.Now().UTC()
 	emptyIdentityToken := identityTokenCacheItemStruct{}
 
+	// ToDo: Change identityTokenCacheType from slice to map??
 	for i, identityTokenFromCache := range identityTokenCache.Cache {
+		// ToDo: Change identityTokenCache to itc
 		if identityTokenFromCache == emptyIdentityToken {
 			continue
 		}
@@ -430,6 +434,19 @@ func (itc identityTokenCacheType) isIdentityTokenValid(tokenToTest string, valid
 		}
 	}
 	return false
+}
+
+//
+func (itc identityTokenCacheType) getNick(token string) (nick string) {
+	// ToDo: Switch itc.Cache to map??
+	for i, _ := range itc.Cache {
+		// check if tokens are equal
+		if identityTokenCache.Cache[i].Token == token {
+			nick = identityTokenCache.Cache[i].Nick
+			return nick
+		}
+	}
+	return ""
 }
 
 /********************************************************************

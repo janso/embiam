@@ -7,15 +7,17 @@ import (
 	"time"
 )
 
-const TEST_PASSWORD = `PaSsWoRdPaSsWoRd`
-const TEST_HOST = `127.0.0.1`
-const NICK_PATTERN = "N1CK%04d"
+const (
+	testPassword = `PaSsWoRdPaSsWoRd`
+	testHost     = `127.0.0.1`
+	nickPattern  = "N1CK%04d"
+)
 
 var testNickIdentityToken map[string]identityTokenStruct
 
 func signIn(t *testing.T, nick, password string) {
 	// use credentials to get identity token
-	identityToken, err := CheckIdentity(nick, TEST_PASSWORD, TEST_HOST)
+	identityToken, err := CheckIdentity(nick, testPassword, testHost)
 	if err != nil {
 		t.Errorf("in signIn() function CheckIdentity(nick, TestPassword, host) returned error %s ; want identity token\n", err)
 	}
@@ -24,18 +26,19 @@ func signIn(t *testing.T, nick, password string) {
 }
 
 func TestGetIdentityTokenMock(t *testing.T) {
-	const NICK_COUNT = 5
-	const TEST_NICK = `N1CK0001`
-
+	const (
+		nickCount = 5
+		testNick  = `N1CK0001`
+	)
 	// initialize embiam
 	Initialize(new(DbTransient))
 
 	// Generate test entities
-	for i := 1; i <= NICK_COUNT; i++ {
-		nick := fmt.Sprintf(NICK_PATTERN, i)
+	for i := 1; i <= nickCount; i++ {
+		nick := fmt.Sprintf(nickPattern, i)
 		e := Entity{
 			Nick:                 nick,
-			PasswordHash:         Hash(TEST_PASSWORD),
+			PasswordHash:         Hash(testPassword),
 			SecretHash:           Hash(`SeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEt`),
 			Active:               true,
 			WrongPasswordCounter: 0,
@@ -53,18 +56,18 @@ func TestGetIdentityTokenMock(t *testing.T) {
 
 	// Use credentials (nick and password) to get an identity token (for the client's ip address)
 	// Sign in with correct credentials
-	identityToken, err := CheckIdentity(TEST_NICK, TEST_PASSWORD, TEST_HOST)
+	identityToken, err := CheckIdentity(testNick, testPassword, testHost)
 	if err != nil {
 		t.Errorf("CheckIdentity(testNick, TestPassword, host) returned error %s ; want identity token\n", err)
 	}
 
 	// validate if identity token is valid
-	if !IsIdentityTokenValid(identityToken.Token, TEST_HOST) {
+	if !IsIdentityTokenValid(identityToken.Token, testHost) {
 		t.Errorf("IsIdentityTokenValid(identityToken.Token, host) has returned false; want true\n")
 	}
 
 	// Use wrong credentials to get an identity token
-	identityToken, err = CheckIdentity(TEST_NICK, `invalidPassword`, TEST_HOST)
+	identityToken, err = CheckIdentity(testNick, `invalidPassword`, testHost)
 	if err == nil {
 		t.Errorf("CheckIdentity(testNick, `invalidPassword`, host) hasn't returned and error; want and error message\n")
 	}
@@ -73,27 +76,27 @@ func TestGetIdentityTokenMock(t *testing.T) {
 	testNickIdentityToken = make(map[string]identityTokenStruct)
 
 	// sign in for NICK0001, NICK0002, ... and save identity tokens in NickIdentityToken (type map[string]identityTokenStruct)
-	for i := 1; i <= NICK_COUNT; i++ {
-		nick := fmt.Sprintf(NICK_PATTERN, i)
-		signIn(t, nick, TEST_PASSWORD)
+	for i := 1; i <= nickCount; i++ {
+		nick := fmt.Sprintf(nickPattern, i)
+		signIn(t, nick, testPassword)
 	}
 
 	// check if NickIdentityToken contains all identity tokens
-	for i := 1; i <= NICK_COUNT; i++ {
-		nick := fmt.Sprintf(NICK_PATTERN, i)
+	for i := 1; i <= nickCount; i++ {
+		nick := fmt.Sprintf(nickPattern, i)
 		identityToken, exists := testNickIdentityToken[nick]
 		if !exists {
 			t.Errorf("identity token for nick %s doesn't exist after concurrent sign in; want identity token\n", nick)
 		}
-		if !IsIdentityTokenValid(identityToken.Token, TEST_HOST) {
+		if !IsIdentityTokenValid(identityToken.Token, testHost) {
 			t.Errorf("IsIdentityTokenValid(identityToken.Token, host) has returned false for %s after concurrent sign in; want true\n", nick)
 		}
 	}
 }
 
 func TestCreateEntityWithFileDb(t *testing.T) {
-	const NICK_COUNT = 4
-	const ENTITY_COUNT = 4
+	const nickCount = 4
+	const entityCount = 4
 
 	// Initiallize (using filesystem as database)
 	db := new(DbFile)
@@ -106,11 +109,11 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 
 	// Generate test entities
 	// Create them directly without the usualprocedure with entity tokens
-	for i := 1; i <= NICK_COUNT; i++ {
-		nick := fmt.Sprintf(NICK_PATTERN, i)
+	for i := 1; i <= nickCount; i++ {
+		nick := fmt.Sprintf(nickPattern, i)
 		e := Entity{
 			Nick:                 nick,
-			PasswordHash:         Hash(TEST_PASSWORD),
+			PasswordHash:         Hash(testPassword),
 			SecretHash:           Hash(`SeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEt`),
 			Active:               true,
 			WrongPasswordCounter: 0,
@@ -133,8 +136,8 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 	   2. the user creates his personal entity using the entity token
 	*/
 	// 1. generate entity tokens (they are provided by the adminitrator and used by the user to generate the entity)
-	entityTokens := make([]EntityToken, 0, NICK_COUNT)
-	for i := 0; i < ENTITY_COUNT; i++ {
+	entityTokens := make([]EntityToken, 0, nickCount)
+	for i := 0; i < entityCount; i++ {
 		entityToken := NewEntityToken()
 		entityToken.Save()
 		entityTokens = append(entityTokens, entityToken)
@@ -143,7 +146,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 	// 2. use entity tokens to generate real, usable entities
 	newEntity := NewEntityStruct{}
 	var err error
-	for i := 0; i < ENTITY_COUNT; i++ {
+	for i := 0; i < entityCount; i++ {
 		newEntity, err = NewEntity(entityTokens[i].Token, entityTokens[i].Pin)
 		if err != nil {
 			t.Errorf("NewEntity(...) returned error %s; want new entity without error\n", err)
@@ -205,7 +208,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 		with nick and password
 	*/
 	// provide nick and password and get identity token back
-	identityToken, err := CheckIdentity(newEntity.Nick, newEntity.Password, TEST_HOST)
+	identityToken, err := CheckIdentity(newEntity.Nick, newEntity.Password, testHost)
 	if err != nil {
 		t.Errorf("CheckIdentity(entity.Nick, password, TEST_HOST) returned error %s; want identity token without error\n", err)
 	}
@@ -214,7 +217,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 	// With the provided identity token, the user can e.g. call APIs
 	// When an API is called, the client passes the identity token to the server and the server checks the identity token
 	for i := 0; i <= 5; i++ {
-		if !IsIdentityTokenValid(identityToken.Token, TEST_HOST) {
+		if !IsIdentityTokenValid(identityToken.Token, testHost) {
 			t.Errorf("IsIdentityTokenValid(identityToken.Token, TEST_HOST) returned false (invalid identity); want true (identity token need to be valid)\n")
 		}
 	}
@@ -228,7 +231,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 	// simulate authValue
 	authValue := "embiam " + base64.StdEncoding.EncodeToString([]byte(newEntity.Nick+":"+newEntity.Password))
 	// get identityToken with authValue
-	identityToken, returnNick, err := CheckAuthIdentity(authValue, TEST_HOST)
+	identityToken, returnNick, err := CheckAuthIdentity(authValue, testHost)
 	if err != nil {
 		t.Errorf("CheckAuthIdentity(authValue, TEST_HOST) with authValue %s returned error %s; want identity token without error\n", authValue, err)
 	}
@@ -240,7 +243,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 	// Authorization:embiam based64-encoded-string from identityToken, e.g. "Authorization:embiam TEFDVlVLQko6RHJIWGhNdjd1QisuQ3hjNg=="
 	authValue = "embiam " + base64.StdEncoding.EncodeToString([]byte(identityToken.Token))
 	for i := 0; i <= 5; i++ {
-		if !IsAuthIdentityTokenValid(authValue, TEST_HOST) {
+		if !IsAuthIdentityTokenValid(authValue, testHost) {
 			t.Errorf("IsAuthIdentityTokenValid(authValue, TEST_HOST) returned false; want true\n")
 		}
 	}
@@ -249,7 +252,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 		SIGN IN WITH WRONG CREDETIALS
 		After a sign in with wrong credentials the number of false attempts is increased. Also the time of the wrong attempt is logged.
 	*/
-	_, err = CheckIdentity(newEntity.Nick, `Wr0ngPassWord`, TEST_HOST)
+	_, err = CheckIdentity(newEntity.Nick, `Wr0ngPassWord`, testHost)
 	if err == nil {
 		t.Errorf("CheckIdentity(entity.Nick, `Wr0ngPassWord`, TEST_HOST) returned NO error; want error\n")
 	}
@@ -268,7 +271,7 @@ func TestCreateEntityWithFileDb(t *testing.T) {
 		The entity is locked by setting Entity.Active to false.
 	*/
 	for i := 0; i <= Configuration.MaxSignInAttempts; i++ {
-		_, err = CheckIdentity(newEntity.Nick, `Wr0ngPassWord`, TEST_HOST)
+		_, err = CheckIdentity(newEntity.Nick, `Wr0ngPassWord`, testHost)
 		if err == nil {
 			t.Errorf("CheckIdentity(entity.Nick, `Wr0ngPassWord`, TEST_HOST) returned NO error; want error")
 		}

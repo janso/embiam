@@ -129,7 +129,7 @@ func (r *RoleCacheMap) GetAuthorizationsForEntity(entity *Entity) ([]Authorizati
 func (r RoleCacheMap) GetAuthorizationsFromRole(roleId RoleIdType) ([]AuthorizationStruct, error) {
 	roleBody, ok := r[roleId]
 	if !ok {
-		return nil, fmt.Errorf("role %s doesn't exists", roleId)
+		return nil, fmt.Errorf("role '%s' doesn't exists", roleId)
 	}
 	authorizations := []AuthorizationStruct{}
 	// collect direct authorizations from role
@@ -172,10 +172,16 @@ func AddNicksAuthorizationsToCache(entity *Entity) error {
 	return nil
 }
 
-// IsAuthorized checks if the entity, provided through nick, is authorizied for action on ressource
-func (ac AuthorizationCacheMap) IsNickAuthorized(nick string, ressource RessourceType, action ActionType) bool {
+// IsAuthorized checks if the entity, provided through token, is authorizied for action on ressource
+func IsAuthorized(identityToken string, ressourceString string, actionString string) bool {
+	// get nick from token
+	nick := identityTokenCache.getNick(identityToken)
+	if nick == "" {
+		return false // invalid token
+	}
+
 	// get all authorizations of nick
-	nickAuths, ok := ac[nick]
+	nickAuths, ok := authorizationCache[nick]
 	if !ok {
 		return false
 	}
@@ -183,9 +189,9 @@ func (ac AuthorizationCacheMap) IsNickAuthorized(nick string, ressource Ressourc
 	// ToDo: O(n) --> O(1) || O(log n)
 	for _, auth := range nickAuths {
 		// check if the authorization's ressources contains the requested ressource
-		if auth.Ressource.contains(ressource) {
+		if auth.Ressource.contains(RessourceType(ressourceString)) {
 			// check action
-			_, ok := auth.Action[action]
+			_, ok := auth.Action[ActionType(actionString)]
 			if ok {
 				// nick has authorization for ressource and for action
 				return true

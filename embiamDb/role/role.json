@@ -3,9 +3,9 @@
 		"authorization": [
 			{
 				"ressource": "embiam.*",
-				"activity": [
-					"read"
-				]
+				"action": {
+					"*": {}
+				}
 			}
 		],
 		"containedRoles": null
@@ -14,9 +14,9 @@
 		"authorization": [
 			{
 				"ressource": "embiam.*",
-				"activity": [
-					"read"
-				]
+				"action": {
+					"read": {}
+				}
 			}
 		],
 		"containedRoles": null
