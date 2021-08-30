@@ -1,59 +1,42 @@
 package embiam
 
 import (
-	"encoding/json"
+	"fmt"
 	"testing"
 )
 
-func TestAuthNode(t *testing.T) {
-	model := new(DbFile)
-	Initialize(model)
+func TestAuth(t *testing.T) {
+	db := new(DbFile)
+	Initialize(db)
 
-	// create test data and save it
-	authNodeJson := `
-	[{
-		"id":"embiam.entity.all",
-		"node":["embiam.entityToken.all"],
-		"authorization":{
-			"activity":["*"]
-		}
-	},
-	{
-		"id":"embiam.entity.provider",
-		"node":["embiam.entity.viewer","embiam.entityToken.all"],
-		"authorization":{
-			"activity":["read", "reactivate"]
-		}
-	},
-	{
-		"Id":"embiam.entity.viewer",
-		"authorization":{
-			"activity":["read"]
-		}
-	},
-	{
-		"id":"embiam.entityToken.all",
-		"authorization":{
-			"activity":["*"]
-		}
-	}]`
-
-	authNodes := new([]AuthNodeStruct)
-	err := json.Unmarshal([]byte(authNodeJson), authNodes)
-	if err != nil {
-		t.Errorf("in signIn() function CheckIdentity(nick, TestPassword, host) returned error %s ; want identity token", err)
-	}
-	err = model.SaveAuthNodes(authNodes)
-	if err != nil {
-		t.Errorf("Error saving authorization nodes %s; want save without error\n", err)
+	// create example roleMap
+	roleMap := RoleMap{
+		"embiam.admin": {
+			Authorization: []AuthorizationStruct{
+				{
+					Ressource: "embiam.*",
+					Activity:  []ActivityType{"read"},
+				},
+			},
+		},
+		"embiam.reader": {
+			Authorization: []AuthorizationStruct{
+				{
+					Ressource: "embiam.*",
+					Activity:  []ActivityType{"read"},
+				},
+			},
+		},
 	}
 
-	// load test data
-	authNodes = new([]AuthNodeStruct)
-	err = model.ReadAuthNodes(authNodes)
+	err := db.SaveRoles(roleMap)
 	if err != nil {
-		t.Errorf("Error loading authorization nodes %s; want save without error\n", err)
+		t.Errorf("db.SaveRoles(&roles) returned error %s; want no error\n", err)
 	}
 
-	// t.Logf("%s\n", authNodes)
+	readRoles, err := db.ReadRoles()
+	if err != nil {
+		t.Errorf("db.ReadRoles(&roles) returned error %s; want no error\n", err)
+	}
+	fmt.Printf("%s\n", readRoles)
 }

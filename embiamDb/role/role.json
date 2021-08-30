@@ -1,0 +1,24 @@
+{
+	"embiam.admin": {
+		"authorization": [
+			{
+				"ressource": "embiam.*",
+				"activity": [
+					"read"
+				]
+			}
+		],
+		"containedRoles": null
+	},
+	"embiam.reader": {
+		"authorization": [
+			{
+				"ressource": "embiam.*",
+				"activity": [
+					"read"
+				]
+			}
+		],
+		"containedRoles": null
+	}
+}

@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"strings"
 	"time"
@@ -44,12 +43,15 @@ func Initialize(aDb DbInterface) {
 	Db = aDb
 	Db.Initialize()
 
+	// initialize authorizations
+	initializeAuthorizations()
+
 	//  initialize the token cache
 	identityTokenCache := identityTokenCacheType{}
 	identityTokenCache.Cache = make(identityTokenCacheItemSlice, 0, 1024)
 }
 
-// CheckAuthIdentity checks nick and password and provides and identity token (for validFor)
+// CheckAuthIdentity checks an authValue and provides and identity token (for validFor)
 // it also returns the nick, that was checked
 func CheckAuthIdentity(authValue string, validFor string) (identityTokenStruct, string, error) {
 	/*
@@ -72,18 +74,20 @@ func CheckAuthIdentity(authValue string, validFor string) (identityTokenStruct, 
 		return identityTokenStruct{}, "", errorInvalidAuthorization
 	}
 	// split username and password
-	nickpass := strings.Split(string(decodedCredentials), ":")
-	if len(nickpass) < 2 {
+	splitResult := strings.Split(string(decodedCredentials), ":")
+	if len(splitResult) < 2 {
 		return identityTokenStruct{}, "", errorInvalidAuthorization
 	}
 	// do actual check
-	identityToken, err := CheckIdentity(nickpass[0], nickpass[1], validFor)
-	return identityToken, nickpass[0], err
+	identityToken, err := CheckIdentity(splitResult[0], splitResult[1], validFor)
+	// return identity token, nick and error
+	return identityToken, splitResult[0], err
 }
 
 // CheckIdentity checks nick and password and provides and identity token (for validFor)
 func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error) {
 	identityToken := identityTokenStruct{}
+	// read complete entity by nick
 	entity, err := Db.ReadEntityByNick(nick)
 	if err != nil {
 		return identityToken, err
@@ -105,7 +109,7 @@ func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error)
 		entity.LastSignInAttempt = time.Now().UTC()
 		err = Db.SaveEntity(entity)
 		if err != nil {
-			log.Printf("ERROR saving nick %s after wrong password\n", nick)
+			return identityToken, err
 		}
 		// return error
 		return identityToken, errors.New("invalid password")
@@ -114,7 +118,7 @@ func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error)
 	entity.LastSignIn = time.Now().UTC()
 	err = Db.SaveEntity(entity)
 	if err != nil {
-		log.Printf("ERROR saving nick %s after sign in\n", nick)
+		return identityToken, err
 	}
 
 	// create identity token
@@ -126,6 +130,12 @@ func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error)
 
 	// save identity token, validity and remove address in cache
 	identityTokenCache.add(identityToken.Token, identityToken.ValidUntil, validFor)
+
+	// prepare authorizations for nick
+	err = BufferAuthorizationsForEntity(entity)
+	if err != nil {
+		return identityToken, err
+	}
 
 	// return identityToken (with token and valid until)
 	return identityToken, nil
@@ -172,44 +182,48 @@ func IsIdentityTokenValid(token string, validFor string) bool {
 	multiple unsuccessful password entries.
 *********************************************************************/
 
-// PublicEntity describes a user or a device (without hashes)
-type PublicEntity struct {
-	Nick                 string    `json:"nick"`
-	Active               bool      `json:"active"`
-	WrongPasswordCounter int       `json:"wrongPasswordCounter"`
-	LastSignInAttempt    time.Time `json:"lastSignInAttempt"`
-	LastSignIn           time.Time `json:"lastSignIn"`
-	CreateTimeStamp      time.Time `json:"createTimeStamp"`
-	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
-}
+type (
+	// Entity describes a user or a device
+	Entity struct {
+		Nick                 string       `json:"nick"`
+		PasswordHash         string       `json:"passwordHash"`
+		SecretHash           string       `json:"secretHash"`
+		Active               bool         `json:"active"`
+		WrongPasswordCounter int          `json:"wrongPasswordCounter"`
+		LastSignInAttempt    time.Time    `json:"lastSignInAttempt"`
+		LastSignIn           time.Time    `json:"lastSignIn"`
+		CreateTimeStamp      time.Time    `json:"createTimeStamp"`
+		UpdateTimeStamp      time.Time    `json:"updateTimeStamp"`
+		Roles                []RoleIdType `json:"roles"`
+	}
 
-// Entity describes a user or a device
-type Entity struct {
-	Nick                 string    `json:"nick"`
-	PasswordHash         string    `json:"passwordHash"`
-	SecretHash           string    `json:"secretHash"`
-	Active               bool      `json:"active"`
-	WrongPasswordCounter int       `json:"wrongPasswordCounter"`
-	LastSignInAttempt    time.Time `json:"lastSignInAttempt"`
-	LastSignIn           time.Time `json:"lastSignIn"`
-	CreateTimeStamp      time.Time `json:"createTimeStamp"`
-	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
-}
+	// PublicEntity describes a user or a device (without hashes)
+	PublicEntity struct {
+		Nick                 string       `json:"nick"`
+		Active               bool         `json:"active"`
+		WrongPasswordCounter int          `json:"wrongPasswordCounter"`
+		LastSignInAttempt    time.Time    `json:"lastSignInAttempt"`
+		LastSignIn           time.Time    `json:"lastSignIn"`
+		CreateTimeStamp      time.Time    `json:"createTimeStamp"`
+		UpdateTimeStamp      time.Time    `json:"updateTimeStamp"`
+		Roles                []RoleIdType `json:"roles"`
+	}
 
-// NewEntity contains all fields of Entity but also the password and the secret (not only the hash)
-type NewEntityStruct struct {
-	Nick                 string    `json:"nick"`
-	Password             string    `json:"password"`
-	Secret               string    `json:"secret"`
-	PasswordHash         string    `json:"passwordHash"`
-	SecretHash           string    `json:"secretHash"`
-	Active               bool      `json:"active"`
-	WrongPasswordCounter int       `json:"wrongPasswordCounter"`
-	LastSignInAttempt    time.Time `json:"lastSignInAttempt"`
-	LastSignIn           time.Time `json:"lastSignIn"`
-	CreateTimeStamp      time.Time `json:"createTimeStamp"`
-	UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
-}
+	// NewEntity contains all fields of Entity but also the password and the secret (not only the hash)
+	NewEntityStruct struct {
+		Nick                 string    `json:"nick"`
+		Password             string    `json:"password"`
+		Secret               string    `json:"secret"`
+		PasswordHash         string    `json:"passwordHash"`
+		SecretHash           string    `json:"secretHash"`
+		Active               bool      `json:"active"`
+		WrongPasswordCounter int       `json:"wrongPasswordCounter"`
+		LastSignInAttempt    time.Time `json:"lastSignInAttempt"`
+		LastSignIn           time.Time `json:"lastSignIn"`
+		CreateTimeStamp      time.Time `json:"createTimeStamp"`
+		UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
+	}
+)
 
 // NewEntity creates a new entity using an entityToken and PIN
 func NewEntity(entityToken, pin string) (newEntity NewEntityStruct, err error) {
@@ -272,6 +286,7 @@ func (e *Entity) ToPublicEntity() PublicEntity {
 		LastSignIn:           e.LastSignIn,
 		CreateTimeStamp:      e.CreateTimeStamp,
 		UpdateTimeStamp:      e.UpdateTimeStamp,
+		Roles:                e.Roles,
 	}
 }
 

@@ -24,13 +24,15 @@ type DbInterface interface {
 	EntityExists(nick string) bool
 	SaveEntity(entity *Entity) error
 	DeleteEntity(nick string) error
+
 	// Entity Tokens
 	SaveEntityToken(entityToken *EntityToken) error
 	ReadEntityToken(tokenoken string) (*EntityToken, error)
 	DeleteEntityToken(token string) error
-	// Auth Nodes
-	ReadAuthNodes(authNode *[]AuthNodeStruct) error
-	SaveAuthNodes(authNode *[]AuthNodeStruct) error
+
+	// Roles
+	ReadRoles() (roleMap RoleMap, err error)
+	SaveRoles(roleMap RoleMap) error
 }
 
 /*
@@ -103,12 +105,12 @@ func (m DbTransient) DeleteEntityToken(token string) error {
 	return nil
 }
 
-func (m DbTransient) ReadAuthNodes(authNode *[]AuthNodeStruct) error {
+func (m DbTransient) ReadRoles() (roleMap RoleMap, err error) {
 	// ToDo: Implement
-	return nil
+	return nil, nil
 }
 
-func (m DbTransient) SaveAuthNodes(authNode *[]AuthNodeStruct) error {
+func (m DbTransient) SaveRoles(authNode RoleMap) error {
 	// ToDo: Implement
 	return nil
 }
@@ -120,8 +122,10 @@ type DbFile struct {
 	EntityFilePath        string
 	EntityDeletedFilePath string
 	EntityTokenFilePath   string
-	AuthNodeFilePath      string
+	RolePath              string
 	DBPath                string
+
+	RoleFilename string
 }
 
 func (m *DbFile) Initialize() {
@@ -136,13 +140,15 @@ func (m *DbFile) Initialize() {
 	m.EntityFilePath = m.DBPath + `entity/`
 	m.EntityDeletedFilePath = m.DBPath + `entity/deleted/`
 	m.EntityTokenFilePath = m.DBPath + `entityToken/`
-	m.AuthNodeFilePath = m.DBPath + `authNode/`
+	m.RolePath = m.DBPath + `role/`
 
 	// create paths
 	InitializeDirectory(m.EntityFilePath)
 	InitializeDirectory(m.EntityDeletedFilePath)
 	InitializeDirectory(m.EntityTokenFilePath)
-	InitializeDirectory(m.AuthNodeFilePath)
+	InitializeDirectory(m.RolePath)
+
+	m.RoleFilename = `role.json`
 }
 
 func (m DbFile) ReadEntityList() (nicklist []string, e error) {
@@ -274,25 +280,26 @@ func (m DbFile) DeleteContentsFromDirectory(dir string) error {
 	return nil
 }
 
-func (m DbFile) ReadAuthNodes(authNodes *[]AuthNodeStruct) error {
-	filepath := m.AuthNodeFilePath + "embiam_entity.json"
+func (m DbFile) ReadRoles() (roleMap RoleMap, err error) {
+	roleMap = make(RoleMap)
+	filepath := m.RolePath + m.RoleFilename
 	jsonString, err := ioutil.ReadFile(filepath)
 	if err != nil {
-		return err
+		return roleMap, err
 	}
-	err = json.Unmarshal([]byte(jsonString), authNodes)
+	err = json.Unmarshal([]byte(jsonString), &roleMap)
 	if err != nil {
-		return err
+		return roleMap, err
 	}
-	return nil
+	return roleMap, nil
 }
 
-func (m DbFile) SaveAuthNodes(authNodes *[]AuthNodeStruct) error {
-	jsonbytes, err := json.Marshal(authNodes)
+func (m DbFile) SaveRoles(roleMap RoleMap) error {
+	jsonbytes, err := json.MarshalIndent(roleMap, "", "\t")
 	if err != nil {
 		return err
 	}
-	filepath := m.AuthNodeFilePath + "embiam_entity.json"
+	filepath := m.RolePath + m.RoleFilename
 	os.Remove(filepath)
 	err = ioutil.WriteFile(filepath, jsonbytes, 0644)
 	if err != nil {
@@ -312,7 +319,7 @@ func InitializeDirectory(folderPath string) error {
 	}
 	err = os.MkdirAll(folderPath, os.ModePerm)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	return nil
 }
