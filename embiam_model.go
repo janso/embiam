@@ -32,7 +32,9 @@ type DbInterface interface {
 
 	// Roles
 	ReadRoles() (roleMap RoleCacheMap, err error)
+	ReadDefaultRoles() (defaultRoles []RoleIdType, err error)
 	SaveRoles(roleMap RoleCacheMap) error
+	SaveDefaultRoles(efaultRoles []RoleIdType) error
 }
 
 /*
@@ -110,7 +112,17 @@ func (m DbTransient) ReadRoles() (roleMap RoleCacheMap, err error) {
 	return nil, nil
 }
 
+func (m DbTransient) ReadDefaultRoles() (defaultRoles []RoleIdType, err error) {
+	// ToDo: Implement
+	return nil, nil
+}
+
 func (m DbTransient) SaveRoles(authNode RoleCacheMap) error {
+	// ToDo: Implement
+	return nil
+}
+
+func (m DbTransient) SaveDefaultRoles(efaultRoles []RoleIdType) error {
 	// ToDo: Implement
 	return nil
 }
@@ -125,7 +137,8 @@ type DbFile struct {
 	RolePath              string
 	DBPath                string
 
-	RoleFilename string
+	RoleFilename        string
+	DefaultRoleFilename string
 }
 
 func (m *DbFile) Initialize() {
@@ -148,7 +161,9 @@ func (m *DbFile) Initialize() {
 	InitializeDirectory(m.EntityTokenFilePath)
 	InitializeDirectory(m.RolePath)
 
-	m.RoleFilename = `role.json`
+	// set standard filenames
+	m.RoleFilename = `all.json`
+	m.RoleFilename = `default.json`
 }
 
 func (m DbFile) ReadEntityList() (nicklist []string, e error) {
@@ -294,6 +309,21 @@ func (m DbFile) ReadRoles() (roleMap RoleCacheMap, err error) {
 	return roleMap, nil
 }
 
+func (m DbFile) ReadDefaultRoles() (defaultRoles []RoleIdType, err error) {
+	defaultRoles = []RoleIdType{}
+	filepath := m.RolePath + m.DefaultRoleFilename
+	jsonString, err := ioutil.ReadFile(filepath)
+	if err != nil {
+		return defaultRoles, err
+	}
+	err = json.Unmarshal([]byte(jsonString), &defaultRoles)
+	if err != nil {
+		return defaultRoles, err
+	}
+	return defaultRoles, nil
+	return nil, nil
+}
+
 func (m DbFile) SaveRoles(roleMap RoleCacheMap) error {
 	jsonbytes, err := json.MarshalIndent(roleMap, "", "\t")
 	if err != nil {
@@ -305,6 +335,11 @@ func (m DbFile) SaveRoles(roleMap RoleCacheMap) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (m DbFile) SaveDefaultRoles(efaultRoles []RoleIdType) error {
+	// ToDo: Implement
 	return nil
 }
 
