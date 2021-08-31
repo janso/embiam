@@ -92,7 +92,7 @@ func TestAuth(t *testing.T) {
 	}
 
 	// load them (to roleCache)
-	roleCache, err = db.ReadRoles()
+	err = ReadRoles()
 	if err != nil {
 		t.Errorf("db.ReadRoles(&roles) returned error %s; want no error\n", err)
 	}

@@ -20,8 +20,17 @@ func initializeAuthorizations() {
 				}},
 				ContainedRole: []RoleIdType{},
 			},
+			"application": {
+				Authorization: []AuthorizationStruct{{
+					Ressource: "application",
+					Action:    ActionMap{ActionAsteriks: {}},
+				}},
+				ContainedRole: []RoleIdType{},
+			},
 		}
 	}
+	// load default roles (for new entities)
+	defaultRoles, _ = Db.ReadDefaultRoles()
 	// initialize authorization cache
 	authorizationCache = AuthorizationCacheMap{}
 }
@@ -103,8 +112,30 @@ type (
 	RoleCacheMap map[RoleIdType]RoleBodyStruct
 )
 
-// all available roleCache
-var roleCache RoleCacheMap
+var (
+	roleCache    RoleCacheMap // all available roles
+	defaultRoles []RoleIdType // roles automatically assigned to new user
+)
+
+// ReadRoles loads the roles newly from Db
+func ReadRoles() error {
+	var err error
+	roleCache, err = Db.ReadRoles()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ReadDefaultRoles loads the list of roles for new entities
+func ReadDefaultRoles() error {
+	var err error
+	defaultRoles, err = Db.ReadDefaultRoles()
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 // GetAuthorizationsForNick collects all authorizations from roles assigned to nick
 func (r *RoleCacheMap) GetAuthorizationsForEntity(entity *Entity) ([]AuthorizationStruct, error) {

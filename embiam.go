@@ -211,17 +211,18 @@ type (
 
 	// NewEntity contains all fields of Entity but also the password and the secret (not only the hash)
 	NewEntityStruct struct {
-		Nick                 string    `json:"nick"`
-		Password             string    `json:"password"`
-		Secret               string    `json:"secret"`
-		PasswordHash         string    `json:"passwordHash"`
-		SecretHash           string    `json:"secretHash"`
-		Active               bool      `json:"active"`
-		WrongPasswordCounter int       `json:"wrongPasswordCounter"`
-		LastSignInAttempt    time.Time `json:"lastSignInAttempt"`
-		LastSignIn           time.Time `json:"lastSignIn"`
-		CreateTimeStamp      time.Time `json:"createTimeStamp"`
-		UpdateTimeStamp      time.Time `json:"updateTimeStamp"`
+		Nick                 string       `json:"nick"`
+		Password             string       `json:"password"`
+		Secret               string       `json:"secret"`
+		PasswordHash         string       `json:"passwordHash"`
+		SecretHash           string       `json:"secretHash"`
+		Active               bool         `json:"active"`
+		WrongPasswordCounter int          `json:"wrongPasswordCounter"`
+		LastSignInAttempt    time.Time    `json:"lastSignInAttempt"`
+		LastSignIn           time.Time    `json:"lastSignIn"`
+		CreateTimeStamp      time.Time    `json:"createTimeStamp"`
+		UpdateTimeStamp      time.Time    `json:"updateTimeStamp"`
+		Roles                []RoleIdType `json:"roles"`
 	}
 )
 
@@ -259,6 +260,9 @@ func NewEntity(entityToken, pin string) (newEntity NewEntityStruct, err error) {
 			break
 		}
 	}
+
+	// assign default roles
+	ne.Roles = defaultRoles
 
 	// save new entity
 	e := ne.ToEntity()
@@ -302,6 +306,7 @@ func (ne *NewEntityStruct) ToEntity() Entity {
 		LastSignIn:           ne.LastSignIn,
 		CreateTimeStamp:      ne.CreateTimeStamp,
 		UpdateTimeStamp:      ne.UpdateTimeStamp,
+		Roles:                ne.Roles,
 	}
 }
 
@@ -436,10 +441,10 @@ func (itc identityTokenCacheType) isIdentityTokenValid(tokenToTest string, valid
 	return false
 }
 
-//
+// getNick returns the nick for an identity token
 func (itc identityTokenCacheType) getNick(token string) (nick string) {
 	// ToDo: Switch itc.Cache to map??
-	for i, _ := range itc.Cache {
+	for i := range itc.Cache {
 		// check if tokens are equal
 		if identityTokenCache.Cache[i].Token == token {
 			nick = identityTokenCache.Cache[i].Nick
