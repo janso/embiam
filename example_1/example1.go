@@ -11,9 +11,6 @@ import (
 func main() {
 	// Initiallize (with mock data)
 	embiam.Initialize(new(embiam.DbTransient))
-	// embiam.Initialize(embiam.EntityModelMock{}) is not working, because it returns type embiam.EntityModelMock.
-	// new(embiam.EntityModelMock) returns *embiam.EntityModelMock.
-	// see https://jordanorelli.com/post/32665860244/how-to-use-interfaces-in-go
 
 	// Generate test entities
 	for i := 1; i < 4; i++ {

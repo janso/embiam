@@ -27,8 +27,10 @@ func main() {
 	entityTokenCount := 3
 	entityTokens := make([]embiam.EntityToken, 0, entityTokenCount)
 	for i := 0; i < 3; i++ {
-		entityToken := embiam.NewEntityToken()
-		entityToken.Save()
+		entityToken, err := embiam.NewEntityToken()
+		if err != nil {
+			log.Fatalln(err)
+		}
 		entityTokens = append(entityTokens, entityToken)
 	}
 

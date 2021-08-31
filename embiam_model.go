@@ -26,15 +26,15 @@ type DbInterface interface {
 	DeleteEntity(nick string) error
 
 	// Entity Tokens
-	SaveEntityToken(entityToken *EntityToken) error
-	ReadEntityToken(tokenoken string) (*EntityToken, error)
-	DeleteEntityToken(token string) error
+	saveEntityToken(entityToken *EntityToken) error
+	readEntityToken(tokenoken string) (*EntityToken, error)
+	deleteEntityToken(token string) error
 
 	// Roles
-	ReadRoles() (roleMap RoleCacheMap, err error)
-	ReadDefaultRoles() (defaultRoles []RoleIdType, err error)
-	SaveRoles(roleMap RoleCacheMap) error
-	SaveDefaultRoles(efaultRoles []RoleIdType) error
+	readRoles() (roleMap RoleCacheMap, err error)
+	readDefaultRoles() (defaultRoles []RoleIdType, err error)
+	saveRoles(roleMap RoleCacheMap) error
+	saveDefaultRoles(efaultRoles []RoleIdType) error
 }
 
 /*
@@ -49,6 +49,7 @@ func (m *DbTransient) Initialize() {
 	m.entityStore = make(map[string]Entity, 32)
 }
 
+// ToDo: Reuqired???
 func (m DbTransient) ReadEntityList() (nicklist []string, e error) {
 	nicklist = make([]string, len(m.entityStore))
 	for _, entity := range m.entityStore {
@@ -70,7 +71,7 @@ func (m DbTransient) ReadPublicEntityByNick(nick string) (*PublicEntity, error) 
 	if err != nil {
 		return nil, err
 	}
-	publicEntity := entity.ToPublicEntity()
+	publicEntity := entity.toPublicEntity()
 	return &publicEntity, nil
 }
 
@@ -89,12 +90,12 @@ func (m DbTransient) DeleteEntity(nick string) error {
 	return nil
 }
 
-func (m DbTransient) SaveEntityToken(et *EntityToken) error {
+func (m DbTransient) saveEntityToken(et *EntityToken) error {
 	m.entityTokenStore[et.Token] = *et
 	return nil
 }
 
-func (m DbTransient) ReadEntityToken(token string) (*EntityToken, error) {
+func (m DbTransient) readEntityToken(token string) (*EntityToken, error) {
 	et, found := m.entityTokenStore[token]
 	if found {
 		return &et, nil
@@ -102,28 +103,26 @@ func (m DbTransient) ReadEntityToken(token string) (*EntityToken, error) {
 	return nil, errors.New("entity token not found")
 }
 
-func (m DbTransient) DeleteEntityToken(token string) error {
+func (m DbTransient) deleteEntityToken(token string) error {
 	delete(m.entityTokenStore, token)
 	return nil
 }
 
-func (m DbTransient) ReadRoles() (roleMap RoleCacheMap, err error) {
-	// ToDo: Implement
-	return nil, nil
+func (m DbTransient) readRoles() (RoleCacheMap, error) {
+	return roleCache, nil
 }
 
-func (m DbTransient) ReadDefaultRoles() (defaultRoles []RoleIdType, err error) {
-	// ToDo: Implement
-	return nil, nil
+func (m DbTransient) readDefaultRoles() (defaultRoles []RoleIdType, err error) {
+	return defaultRoles, nil
 }
 
-func (m DbTransient) SaveRoles(authNode RoleCacheMap) error {
-	// ToDo: Implement
+func (m DbTransient) saveRoles(newRoleCache RoleCacheMap) error {
+	roleCache = newRoleCache
 	return nil
 }
 
-func (m DbTransient) SaveDefaultRoles(efaultRoles []RoleIdType) error {
-	// ToDo: Implement
+func (m DbTransient) saveDefaultRoles(newDefaultRoles []RoleIdType) error {
+	defaultRoles = newDefaultRoles
 	return nil
 }
 
@@ -207,7 +206,7 @@ func (m DbFile) ReadPublicEntityByNick(nick string) (*PublicEntity, error) {
 	if err != nil {
 		return nil, err
 	}
-	publicEntity := entity.ToPublicEntity()
+	publicEntity := entity.toPublicEntity()
 	return &publicEntity, nil
 }
 
@@ -240,7 +239,7 @@ func (m DbFile) DeleteEntity(nick string) error {
 	return nil
 }
 
-func (m DbFile) SaveEntityToken(et *EntityToken) error {
+func (m DbFile) saveEntityToken(et *EntityToken) error {
 	filepath := m.EntityTokenFilePath + et.Token
 	jsonbytes, err := json.MarshalIndent(et, "", "\t")
 	if err != nil {
@@ -253,7 +252,7 @@ func (m DbFile) SaveEntityToken(et *EntityToken) error {
 	return nil
 }
 
-func (m DbFile) ReadEntityToken(token string) (*EntityToken, error) {
+func (m DbFile) readEntityToken(token string) (*EntityToken, error) {
 	filepath := m.EntityTokenFilePath + token
 	jsonString, err := ioutil.ReadFile(filepath)
 	if err != nil {
@@ -267,7 +266,7 @@ func (m DbFile) ReadEntityToken(token string) (*EntityToken, error) {
 	return &et, nil
 }
 
-func (m DbFile) DeleteEntityToken(token string) error {
+func (m DbFile) deleteEntityToken(token string) error {
 	filepath := m.EntityTokenFilePath + token
 	err := os.Remove(filepath)
 	if err != nil {
@@ -295,7 +294,7 @@ func (m DbFile) DeleteContentsFromDirectory(dir string) error {
 	return nil
 }
 
-func (m DbFile) ReadRoles() (roleMap RoleCacheMap, err error) {
+func (m DbFile) readRoles() (roleMap RoleCacheMap, err error) {
 	roleMap = make(RoleCacheMap)
 	filepath := m.RolePath + m.RoleFilename
 	jsonString, err := ioutil.ReadFile(filepath)
@@ -309,7 +308,7 @@ func (m DbFile) ReadRoles() (roleMap RoleCacheMap, err error) {
 	return roleMap, nil
 }
 
-func (m DbFile) ReadDefaultRoles() (defaultRoles []RoleIdType, err error) {
+func (m DbFile) readDefaultRoles() (defaultRoles []RoleIdType, err error) {
 	defaultRoles = []RoleIdType{}
 	filepath := m.RolePath + m.DefaultRoleFilename
 	jsonString, err := ioutil.ReadFile(filepath)
@@ -321,10 +320,9 @@ func (m DbFile) ReadDefaultRoles() (defaultRoles []RoleIdType, err error) {
 		return defaultRoles, err
 	}
 	return defaultRoles, nil
-	return nil, nil
 }
 
-func (m DbFile) SaveRoles(roleMap RoleCacheMap) error {
+func (m DbFile) saveRoles(roleMap RoleCacheMap) error {
 	jsonbytes, err := json.MarshalIndent(roleMap, "", "\t")
 	if err != nil {
 		return err
@@ -338,7 +336,7 @@ func (m DbFile) SaveRoles(roleMap RoleCacheMap) error {
 	return nil
 }
 
-func (m DbFile) SaveDefaultRoles(efaultRoles []RoleIdType) error {
+func (m DbFile) saveDefaultRoles(efaultRoles []RoleIdType) error {
 	// ToDo: Implement
 	return nil
 }

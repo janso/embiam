@@ -43,12 +43,12 @@ func Initialize(aDb DbInterface) {
 	Db = aDb
 	Db.Initialize()
 
-	// initialize authorizations
-	initializeAuthorizations()
-
 	//  initialize the token cache
 	identityTokenCache := identityTokenCacheType{}
 	identityTokenCache.Cache = make(identityTokenCacheItemSlice, 0, 1024)
+
+	// initialize authorizations
+	initializeAuthorizations()
 }
 
 // CheckAuthIdentity checks an authValue and provides and identity token (for validFor)
@@ -122,7 +122,7 @@ func CheckIdentity(nick, password, validFor string) (identityTokenStruct, error)
 	}
 
 	// create identity token
-	identityToken.Token = GenerateIdentityToken()
+	identityToken.Token = generateIdentityToken()
 
 	// set end of validity
 	seconds := Configuration.IdentityTokenValiditySeconds // get number of minutes from config
@@ -232,7 +232,7 @@ func NewEntity(entityToken, pin string) (newEntity NewEntityStruct, err error) {
 	ne := NewEntityStruct{}
 
 	// check entity token
-	et, err := Db.ReadEntityToken(entityToken)
+	et, err := Db.readEntityToken(entityToken)
 	if err != nil {
 		return ne, err
 	}
@@ -246,8 +246,8 @@ func NewEntity(entityToken, pin string) (newEntity NewEntityStruct, err error) {
 	}
 
 	// create entity with password and secret
-	ne.Password = GeneratePassword(32)
-	ne.Secret = GeneratePassword(64)
+	ne.Password = generatePassword(32)
+	ne.Secret = generatePassword(64)
 	ne.PasswordHash = Hash(ne.Password)
 	ne.SecretHash = Hash(ne.Secret)
 	ne.Active = true
@@ -255,7 +255,7 @@ func NewEntity(entityToken, pin string) (newEntity NewEntityStruct, err error) {
 
 	// generate a unique nick
 	for {
-		ne.Nick = GenerateNick()
+		ne.Nick = generateNick()
 		if !Db.EntityExists(ne.Nick) {
 			break
 		}
@@ -265,14 +265,14 @@ func NewEntity(entityToken, pin string) (newEntity NewEntityStruct, err error) {
 	ne.Roles = defaultRoles
 
 	// save new entity
-	e := ne.ToEntity()
+	e := ne.toEntity()
 	err = Db.SaveEntity(&e)
 	if err != nil {
 		return NewEntityStruct{}, err
 	}
 
 	// delete entity token
-	err = et.Delete()
+	err = Db.deleteEntityToken(et.Token)
 	if err != nil {
 		return NewEntityStruct{}, err
 	}
@@ -280,8 +280,8 @@ func NewEntity(entityToken, pin string) (newEntity NewEntityStruct, err error) {
 	return ne, nil
 }
 
-// ToPublicEntity converts an EntityStruct to PublicEntity
-func (e *Entity) ToPublicEntity() PublicEntity {
+// toPublicEntity converts an EntityStruct to PublicEntity
+func (e *Entity) toPublicEntity() PublicEntity {
 	return PublicEntity{
 		Nick:                 e.Nick,
 		Active:               e.Active,
@@ -294,8 +294,8 @@ func (e *Entity) ToPublicEntity() PublicEntity {
 	}
 }
 
-// ToEntity converts a NewEntityStruct to Entity
-func (ne *NewEntityStruct) ToEntity() Entity {
+// toEntity converts a NewEntityStruct to Entity
+func (ne *NewEntityStruct) toEntity() Entity {
 	return Entity{
 		Nick:                 ne.Nick,
 		PasswordHash:         ne.PasswordHash,
@@ -325,25 +325,17 @@ type EntityToken struct {
 }
 
 // NewEntityToken creates a new entity token (token itself and validity, comming from configuration)
-func NewEntityToken() EntityToken {
+func NewEntityToken() (EntityToken, error) {
 	// set end of validity
 	hours := Configuration.EntityTokenValidityHours // number of hours the entity token is valid
 	validUntil := time.Now().UTC().Add(time.Hour * time.Duration(hours))
-	return EntityToken{
-		Token:      GenerateEntityToken(),
-		Pin:        GeneratePin(),
+	et := EntityToken{
+		Token:      generateEntityToken(),
+		Pin:        generatePin(),
 		ValidUntil: validUntil,
 	}
-}
-
-// Save the entity token to database
-func (et EntityToken) Save() error {
-	return Db.SaveEntityToken(&et)
-}
-
-// Delete the entity token from database
-func (et EntityToken) Delete() error {
-	return Db.DeleteEntityToken(et.Token)
+	err := Db.saveEntityToken(&et)
+	return et, err
 }
 
 /********************************************************************
@@ -360,7 +352,7 @@ type (
 	identityTokenCacheItemStruct struct {
 		Token      string
 		ValidUntil time.Time
-		ValidFor   string
+		ValidFor   string // identification of the caller, e.g. the IP
 		Nick       string
 	}
 
@@ -470,8 +462,8 @@ func Hash(original string) string {
 	return string(hash)
 }
 
-// GenerateIdentityToken generates a identity token
-func GenerateIdentityToken() string {
+// generateIdentityToken generates a identity token
+func generateIdentityToken() string {
 	const tokenLength = 24
 	password := make([]byte, tokenLength)
 	for i := range password {
@@ -480,8 +472,8 @@ func GenerateIdentityToken() string {
 	return string(password)
 }
 
-// GenerateNick generates a nick
-func GenerateNick() string {
+// generateNick generates a nick
+func generateNick() string {
 	const nickLength = 8
 	nick := make([]byte, nickLength)
 	for i := range nick {
@@ -490,8 +482,8 @@ func GenerateNick() string {
 	return string(nick)
 }
 
-// GeneratePin generates a PIN
-func GeneratePin() string {
+// generatePin generates a PIN
+func generatePin() string {
 	const pinLength = 6
 	pin := make([]byte, pinLength)
 	for i := range pin {
@@ -500,8 +492,8 @@ func GeneratePin() string {
 	return string(pin)
 }
 
-// GeneratePassword generates a password
-func GeneratePassword(length int) string {
+// generatePassword generates a password
+func generatePassword(length int) string {
 	password := make([]byte, length)
 	for i := range password {
 		password[i] = passwordChars[rand.Intn(len(passwordChars))]
@@ -509,8 +501,8 @@ func GeneratePassword(length int) string {
 	return string(password)
 }
 
-// GenerateEntityToken generates a valid entity token
-func GenerateEntityToken() string {
+// generateEntityToken generates a valid entity token
+func generateEntityToken() string {
 	const tokenLength = 32
 	token := make([]byte, tokenLength)
 	for i := range token {

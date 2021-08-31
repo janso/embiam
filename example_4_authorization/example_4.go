@@ -38,15 +38,9 @@ func main() {
 	}
 
 	// save roles
-	err := db.SaveRoles(roleExample)
+	err := embiam.SaveRoles(roleExample)
 	if err != nil {
 		log.Printf("db.SaveRoles(&roles) returned error %s; want no error\n", err)
-	}
-
-	// load them (to roleCache)
-	err = embiam.ReadRoles()
-	if err != nil {
-		log.Printf("embiam.ReadRoles() returned error %s; want no error\n", err)
 	}
 
 	// generate example entity with role embiam.reader

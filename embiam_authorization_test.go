@@ -2,6 +2,7 @@ package embiam
 
 import (
 	"fmt"
+	"log"
 	"testing"
 	"time"
 )
@@ -86,22 +87,15 @@ func TestAuth(t *testing.T) {
 	}
 
 	// save roles
-	err := db.SaveRoles(roleExample)
+	err := db.saveRoles(roleExample)
 	if err != nil {
 		t.Errorf("db.SaveRoles(&roles) returned error %s; want no error\n", err)
 	}
-
-	// load them (to roleCache)
-	err = ReadRoles()
-	if err != nil {
-		t.Errorf("db.ReadRoles(&roles) returned error %s; want no error\n", err)
-	}
-	if roleCache == nil {
-		t.Errorf("db.ReadRoles(&roles) returned no roles; want prepared roles\n")
+	if len(roleCache) == 0 {
+		t.Errorf("len(roleCache) == 0; want prepared roles\n")
 	}
 
 	// generate example entity with role embiam.reader
-
 	entity1 := Entity{
 		Nick:                 fmt.Sprintf(nickPattern, 1),
 		PasswordHash:         Hash(testPassword),
@@ -208,4 +202,60 @@ func TestAuth(t *testing.T) {
 	if IsAuthorized(identityToken3.Token, "embiam.admin", "read") {
 		t.Errorf("IsAuthorized(identityToken.Token3, embiam.admin, read) returned true; want false\n")
 	}
+}
+
+func TestAuthNewEntity(t *testing.T) {
+	// initialize embiam
+	db := new(DbFile)
+	Initialize(db)
+
+	// clean up db
+	db.DeleteContentsFromDirectory(db.EntityFilePath)
+	InitializeDirectory(db.EntityDeletedFilePath) // recreate directory, deleted in step before
+	db.DeleteContentsFromDirectory(db.EntityTokenFilePath)
+
+	/*
+	   GENERATE ENTITY (users)
+	   following the usual process:
+	   1. the admin generates an entity token and provides it to the user
+	   2. the user creates his personal entity using the entity token
+	*/
+	// 1. generate entity token (they are provided by the adminitrator and used by the user to generate the entity)
+	entityToken, err := NewEntityToken()
+	if err != nil {
+		t.Errorf("entityToken.Save() returned error %s; want no error\n", err)
+	}
+
+	// 2. use entity token to generate entity
+	newEntity, err := NewEntity(entityToken.Token, entityToken.Pin)
+	if err != nil {
+		t.Errorf("NewEntity(entityToken.Token, entityToken.Pin) returned error %s; want no error\n", err)
+	}
+	// check if new entity has default role
+	if newEntity.Roles[0] != "application" {
+		t.Errorf("newEntity.Roles[1] != 'application'; want default role 'application'\n")
+		return
+	}
+
+	/*
+		GET IDENTITY TOKEN
+		from nick and password
+	*/
+	// provide nick and password and get identity token back
+	identityToken, err := CheckIdentity(newEntity.Nick, newEntity.Password, "localhost")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Printf("Identity of %s was validated. The identity token %s was provided\n\n", newEntity.Nick, identityToken.Token)
+	// receive an identity token to use later (without credentials)
+
+	// With the provided identity token, the user can e.g. call APIs
+	// When an API is called, the client passes the identity token  to the server.
+	// The server checks the identity token
+	if IsIdentityTokenValid(identityToken.Token, "localhost") {
+		fmt.Printf("Identity token is valid.\n\n")
+	} else {
+		log.Fatalln(err)
+	}
+
 }

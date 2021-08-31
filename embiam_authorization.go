@@ -8,21 +8,24 @@ import (
 // initializeAuthorization initializes the authorization sub system
 func initializeAuthorizations() {
 	// load roles
-	roles, _ := Db.ReadRoles()
+	roles, _ := Db.readRoles()
+	if roles == nil {
+		roles = RoleCacheMap{}
+	}
 	if len(roles) == 0 {
 		log.Println("No roles loaded. Using minimal default roles")
 		// create example roleMap
 		roles = RoleCacheMap{
 			"embiam.admin": {
 				Authorization: []AuthorizationStruct{{
-					Ressource: "embiam.*",
+					Ressource: "embiam",
 					Action:    ActionMap{ActionAsteriks: {}},
 				}},
 				ContainedRole: []RoleIdType{},
 			},
-			"application": {
+			`application`: {
 				Authorization: []AuthorizationStruct{{
-					Ressource: "application",
+					Ressource: `application`,
 					Action:    ActionMap{ActionAsteriks: {}},
 				}},
 				ContainedRole: []RoleIdType{},
@@ -30,7 +33,14 @@ func initializeAuthorizations() {
 		}
 	}
 	// load default roles (for new entities)
-	defaultRoles, _ = Db.ReadDefaultRoles()
+	defaultRoles, _ = Db.readDefaultRoles()
+	if defaultRoles == nil {
+		defaultRoles = []RoleIdType{}
+	}
+	if len(defaultRoles) == 0 {
+		defaultRoles = []RoleIdType{`application`}
+	}
+
 	// initialize authorization cache
 	authorizationCache = AuthorizationCacheMap{}
 }
@@ -120,7 +130,11 @@ var (
 // ReadRoles loads the roles newly from Db
 func ReadRoles() error {
 	var err error
-	roleCache, err = Db.ReadRoles()
+	roleCache, err = Db.readRoles()
+	if err != nil {
+		return err
+	}
+	err = roleCache.checkConsistency()
 	if err != nil {
 		return err
 	}
@@ -130,19 +144,43 @@ func ReadRoles() error {
 // ReadDefaultRoles loads the list of roles for new entities
 func ReadDefaultRoles() error {
 	var err error
-	defaultRoles, err = Db.ReadDefaultRoles()
+	defaultRoles, err = Db.readDefaultRoles()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-// GetAuthorizationsForNick collects all authorizations from roles assigned to nick
-func (r *RoleCacheMap) GetAuthorizationsForEntity(entity *Entity) ([]AuthorizationStruct, error) {
+// SaveRoles loads the roles newly from Db
+func SaveRoles(newRoles RoleCacheMap) error {
+	// save
+	err := Db.saveRoles(newRoles)
+	if err != nil {
+		return err
+	}
+	//update cache
+	roleCache = newRoles
+	return nil
+}
+
+// SaveDefaultRoles loads the list of roles for new entities
+func SaveDefaultRoles(newDefaultRoles []RoleIdType) error {
+	// save
+	err := Db.saveDefaultRoles(newDefaultRoles)
+	if err != nil {
+		return err
+	}
+	// update cache
+	defaultRoles = newDefaultRoles
+	return nil
+}
+
+// getAuthorizationsForNick collects all authorizations from roles assigned to nick
+func (r *RoleCacheMap) getAuthorizationsForEntity(entity *Entity) ([]AuthorizationStruct, error) {
 	// collect authorizations from roles
 	authorizations := []AuthorizationStruct{}
 	for _, roleId := range entity.Roles {
-		roleAuthorizations, err := r.GetAuthorizationsFromRole(roleId)
+		roleAuthorizations, err := r.getAuthorizationsFromRole(roleId)
 		if err != nil {
 			return nil, err
 		}
@@ -153,11 +191,16 @@ func (r *RoleCacheMap) GetAuthorizationsForEntity(entity *Entity) ([]Authorizati
 	return authorizations, nil
 }
 
-// GetAuthorizationsFromRole get all authorizations from a role
+func (r *RoleCacheMap) checkConsistency() error {
+	// ToDo: Implement
+	return nil
+}
+
+// getAuthorizationsFromRole get all authorizations from a role
 // direct authorizations that are part of the role itself and indirect authorizations
 // from embedded roles
 // If roleId doesn't exist an error is returned
-func (r RoleCacheMap) GetAuthorizationsFromRole(roleId RoleIdType) ([]AuthorizationStruct, error) {
+func (r RoleCacheMap) getAuthorizationsFromRole(roleId RoleIdType) ([]AuthorizationStruct, error) {
 	roleBody, ok := r[roleId]
 	if !ok {
 		return nil, fmt.Errorf("role '%s' doesn't exists", roleId)
@@ -169,7 +212,7 @@ func (r RoleCacheMap) GetAuthorizationsFromRole(roleId RoleIdType) ([]Authorizat
 
 	// colllect indirect authorizations from embedded roles
 	for _, embeddedRoleId := range roleBody.ContainedRole {
-		indirectAuthorizations, err := r.GetAuthorizationsFromRole(embeddedRoleId)
+		indirectAuthorizations, err := r.getAuthorizationsFromRole(embeddedRoleId)
 		if err != nil {
 			return authorizations, err
 		}
@@ -195,7 +238,7 @@ var authorizationCache AuthorizationCacheMap // authorizations of a nick
 
 // AddNicksAuthorizationsToCache adds the authorizations of a nick to the authorization cache
 func AddNicksAuthorizationsToCache(entity *Entity) error {
-	authorizations, err := roleCache.GetAuthorizationsForEntity(entity)
+	authorizations, err := roleCache.getAuthorizationsForEntity(entity)
 	if err != nil {
 		return err
 	}
