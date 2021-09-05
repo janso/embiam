@@ -63,7 +63,7 @@ func TestAuth(t *testing.T) {
 		nickPattern  = "N1CK%04d"
 	)
 
-	db := new(DbFile)
+	db := new(DbTransient)
 	Initialize(db)
 
 	// create example roleMap
@@ -71,7 +71,7 @@ func TestAuth(t *testing.T) {
 		"embiam.admin": {
 			Authorization: []AuthorizationStruct{
 				{
-					Ressource: "embiam.*",
+					Ressource: "embiam",
 					Action:    ActionMap{ActionAsteriks: {}},
 				},
 			},
@@ -79,7 +79,7 @@ func TestAuth(t *testing.T) {
 		"embiam.reader": {
 			Authorization: []AuthorizationStruct{
 				{
-					Ressource: "embiam.*",
+					Ressource: "embiam",
 					Action:    ActionMap{"read": {}},
 				},
 			},
@@ -150,57 +150,125 @@ func TestAuth(t *testing.T) {
 	// Sign in with correct credentials
 	identityToken1, err := CheckIdentity(entity1.Nick, testPassword, testHost)
 	if err != nil {
-		t.Errorf("CheckIdentity(testNick, testPassword, testHost) returned error %s ; want identity token\n", err)
+		t.Errorf("CheckIdentity(entity1.Nick, testPassword, testHost) returned error %s ; want identity token\n", err)
 	}
 	identityToken2, err := CheckIdentity(entity2.Nick, testPassword, testHost)
 	if err != nil {
-		t.Errorf("CheckIdentity(testNick, testPassword, testHost) returned error %s ; want identity token\n", err)
+		t.Errorf("CheckIdentity(entity2.Nick, testPassword, testHost) returned error %s ; want identity token\n", err)
 	}
 	identityToken3, err := CheckIdentity(entity3.Nick, testPassword, testHost)
 	if err == nil {
-		t.Errorf("CheckIdentity(testNick, testPassword, testHost) returned error %s ; want identity token\n", err)
+		t.Errorf("CheckIdentity(entity3.Nick, testPassword, testHost) returned error %s ; want identity token\n", err)
 	}
 
 	// check authorization for entity 1
-	if !IsAuthorized(identityToken1.Token, "embiam.entity", "read") {
-		t.Errorf("IsAuthorized(identityToken1.Token, embiam.entity, read) returned false; want true\n")
+	if !IsAuthorized(identityToken1.Token, "embiam", "read") {
+		t.Errorf("IsAuthorized(identityToken1.Token, embiam.entity, read) returned true; want false\n")
 	}
-	if IsAuthorized(identityToken1.Token, "embiam.entity", "write") {
-		t.Errorf("IsAuthorized(identityToken1.Token, embiam.entity, write) returned true; want false\n")
+	if IsAuthorized(identityToken1.Token, "embiam", "write") {
+		t.Errorf("IsAuthorized(identityToken1.Token, embiam.entity, write) returned false; want true\n")
 	}
-	if IsAuthorized(identityToken1.Token, "embiam.entity", "*") {
-		t.Errorf("IsAuthorized(identityToken1.Token, embiam.entity, *b) returned true; want false\n")
-	}
-	if !IsAuthorized(identityToken1.Token, "embiam.marmelquark", "read") {
-		t.Errorf("IsAuthorized(identityToken1.Token, embiam.marmelquark, read) returned false; want true\n")
+	if IsAuthorized(identityToken1.Token, "embiam", "*") {
+		t.Errorf("IsAuthorized(identityToken1.Token, embiam.entity, *) returned false; want true\n")
 	}
 
 	// check authorization for entity 2
-	if !IsAuthorized(identityToken2.Token, "embiam.entity", "read") {
+	if !IsAuthorized(identityToken2.Token, "embiam", "read") {
 		t.Errorf("IsAuthorized(identityToken2.Token, embiam.entity, read) returned false; want true\n")
 	}
-	if !IsAuthorized(identityToken2.Token, "embiam.entity", "write") {
+	if !IsAuthorized(identityToken2.Token, "embiam", "write") {
 		t.Errorf("IsAuthorized(identityToken2.Token, embiam.entity, write) returned false; want true\n")
 	}
-	if !IsAuthorized(identityToken2.Token, "embiam.entity", "*") {
+	if !IsAuthorized(identityToken2.Token, "embiam", "*") {
 		t.Errorf("IsAuthorized(identityToken2.Token, embiam.entity, *b) returned false; want true\n")
-	}
-	if !IsAuthorized(identityToken2.Token, "embiam.admin", "read") {
-		t.Errorf("IsAuthorized(identityToken2.Token, embiam.admin, read) returned false; want true\n")
 	}
 
 	// check authorization for entity 3
-	if IsAuthorized(identityToken3.Token, "embiam.entity", "read") {
-		t.Errorf("IsAuthorized(identityToken.Token3, embiam.entity, read) returned false; want true\n")
+	if IsAuthorized(identityToken3.Token, "embiam", "read") {
+		t.Errorf("IsAuthorized(identityToken3.Token, embiam.entity, read) returned false; want true\n")
 	}
-	if IsAuthorized(identityToken3.Token, "embiam.entity", "write") {
-		t.Errorf("IsAuthorized(identityToken.Token3, embiam.entity, write) returned true; want false\n")
+	if IsAuthorized(identityToken3.Token, "embiam", "write") {
+		t.Errorf("IsAuthorized(identityToken3.Token, embiam.entity, write) returned false; want true\n")
 	}
-	if IsAuthorized(identityToken3.Token, "embiam.entity", "*") {
-		t.Errorf("IsAuthorized(identityToken.Token3, embiam.entity, *b) returned true; want false\n")
+	if IsAuthorized(identityToken3.Token, "embiam", "*") {
+		t.Errorf("IsAuthorized(identityToken3.Token, embiam.entity, *b) returned false; want true\n")
 	}
-	if IsAuthorized(identityToken3.Token, "embiam.admin", "read") {
-		t.Errorf("IsAuthorized(identityToken.Token3, embiam.admin, read) returned true; want false\n")
+
+	// create example roleMap
+	roleExample = RoleCacheMap{
+		"a.all": {
+			ContainedRole: []RoleIdType{"a.r", "a.w", "a.*"},
+		},
+		"a.r": {
+			Authorization: []AuthorizationStruct{
+				{
+					Ressource: "a",
+					Action:    ActionMap{"read": {}},
+				},
+			},
+		},
+		"a.w": {
+			Authorization: []AuthorizationStruct{
+				{
+					Ressource: "a",
+					Action:    ActionMap{"write": {}},
+				},
+			},
+		},
+		"a.*": {
+			Authorization: []AuthorizationStruct{
+				{
+					Ressource: "a",
+					Action:    ActionMap{ActionAsteriks: {}},
+				},
+			},
+		},
+	}
+
+	// save roles
+	err = SaveRoles(roleExample)
+	if err != nil {
+		t.Errorf("db.SaveRoles(&roles) returned error %s; want no error\n", err)
+	}
+	if len(roleCache) == 0 {
+		t.Errorf("len(roleCache) == 0; want prepared roles\n")
+	}
+
+	// create new Entity 4 with a.rw
+	entity4 := Entity{
+		Nick:                 fmt.Sprintf(nickPattern, 3),
+		PasswordHash:         Hash(testPassword),
+		SecretHash:           Hash(`SeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEtSeCrEt`),
+		Active:               true,
+		WrongPasswordCounter: 0,
+		LastSignInAttempt:    time.Time{},
+		LastSignIn:           time.Now().UTC(),
+		CreateTimeStamp:      time.Time{},
+		UpdateTimeStamp:      time.Time{},
+		Roles:                []RoleIdType{"a.all"},
+	}
+	err = db.SaveEntity(&entity4)
+	if err != nil {
+		t.Errorf("Db.SaveEntity(&entity4) returned error %s; want save entity without error\n", err)
+	}
+
+	// Sign in with correct credentials
+	identityToken4, err := CheckIdentity(entity4.Nick, testPassword, testHost)
+	if err != nil {
+		t.Errorf("CheckIdentity(testNick, testPassword, testHost) returned error %s ; want identity token\n", err)
+	}
+
+	if !IsAuthorized(identityToken4.Token, "a", "read") {
+		t.Errorf("IsAuthorized(dentityToken4.Token, a, read) returned false; want true\n")
+	}
+	if !IsAuthorized(identityToken4.Token, "a", "write") {
+		t.Errorf("IsAuthorized(identityToken4.Token, a, write) returned false; want true\n")
+	}
+	if !IsAuthorized(identityToken4.Token, "a", "delete") {
+		t.Errorf("IsAuthorized(identityToken4.Token, a, delete) returned false; want true\n")
+	}
+	if !IsAuthorized(identityToken4.Token, "a", string(ActionAsteriks)) {
+		t.Errorf("IsAuthorized(identityToken4.Token, a, *) returned false; want true\n")
 	}
 }
 

@@ -129,7 +129,7 @@ var (
 	defaultRoles []RoleIdType // roles automatically assigned to new user
 )
 
-// ReadRoles loads the roles newly from Db
+// ReadRoles loads the roles newly from Db -- ToDo: Required???
 func ReadRoles() error {
 	var err error
 	roleCache, err = Db.readRoles()
@@ -143,7 +143,7 @@ func ReadRoles() error {
 	return nil
 }
 
-// ReadDefaultRoles loads the list of roles for new entities
+// ReadDefaultRoles load the default roles from Db  -- ToDo: Required???
 func ReadDefaultRoles() error {
 	var err error
 	defaultRoles, err = Db.readDefaultRoles()
@@ -153,7 +153,7 @@ func ReadDefaultRoles() error {
 	return nil
 }
 
-// SaveRoles loads the roles newly from Db
+// SaveRoles saves new roles -- ToDo: Required???
 func SaveRoles(newRoles RoleCacheMap) error {
 	// save
 	err := Db.saveRoles(newRoles)
@@ -165,7 +165,7 @@ func SaveRoles(newRoles RoleCacheMap) error {
 	return nil
 }
 
-// SaveDefaultRoles loads the list of roles for new entities
+// SaveDefaultRoles saves the default roles to Db -- ToDo: Required???
 func SaveDefaultRoles(newDefaultRoles []RoleIdType) error {
 	// save
 	err := Db.saveDefaultRoles(newDefaultRoles)
@@ -253,9 +253,8 @@ func (r RoleCacheMap) getAuthorizationsFromRole(roleId RoleIdType) ([]Authorizat
 	if !ok {
 		return nil, fmt.Errorf("role '%s' doesn't exists", roleId)
 	}
-	authorizations := []AuthorizationStruct{}
 	// collect direct authorizations from role
-	// ToDo: Merge authorizations!
+	authorizations := []AuthorizationStruct{}
 	authorizations = append(authorizations, roleBody.Authorization...)
 
 	// colllect indirect authorizations from embedded roles
@@ -265,10 +264,34 @@ func (r RoleCacheMap) getAuthorizationsFromRole(roleId RoleIdType) ([]Authorizat
 			return authorizations, err
 		}
 		// collect indirect authorizations from embedded role
-		// ToDo: Merge authorizations!
 		authorizations = append(authorizations, indirectAuthorizations...)
 	}
-	return authorizations, nil
+	// merge authorization (one record per ressource)
+	return mergeAuthorizations(authorizations), nil
+}
+
+// mergeAuthorizations combines multiple actions on the same ressource in one record
+// and makes sure that exactly one record exists per ressource
+func mergeAuthorizations(inAuths []AuthorizationStruct) (outAuths []AuthorizationStruct) {
+	outAuthMap := map[RessourceType]ActionMap{}
+	// merge authorizations
+	for _, inAuth := range inAuths {
+		if outAuthMap[inAuth.Ressource] == nil {
+			outAuthMap[inAuth.Ressource] = ActionMap{}
+		}
+		for inAuthAction := range inAuth.Action {
+			outAuthMap[inAuth.Ressource][inAuthAction] = struct{}{}
+		}
+	}
+	// convert outAuthMap to target data structure
+	outAuths = []AuthorizationStruct{}
+	for ressource, actionMap := range outAuthMap {
+		outAuths = append(outAuths, AuthorizationStruct{
+			Ressource: ressource,
+			Action:    actionMap,
+		})
+	}
+	return outAuths
 }
 
 /********************************************************************
