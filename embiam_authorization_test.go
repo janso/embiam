@@ -87,7 +87,7 @@ func TestAuth(t *testing.T) {
 	}
 
 	// save roles
-	err := db.saveRoles(roleExample)
+	err := SaveRoles(roleExample)
 	if err != nil {
 		t.Errorf("db.SaveRoles(&roles) returned error %s; want no error\n", err)
 	}
@@ -204,15 +204,125 @@ func TestAuth(t *testing.T) {
 	}
 }
 
+func TestAuthDefaultRolesTransient(t *testing.T) {
+	// initialize embiam
+	Initialize(new(DbTransient))
+
+	// 1. generate entity token (they are provided by the adminitrator and used by the user to generate the entity)
+	entityToken, err := NewEntityToken()
+	if err != nil {
+		t.Errorf("NewEntityToken() returned error %s; want no error\n", err)
+	}
+
+	// 2. use entity token to generate entity
+	newEntity, err := NewEntity(entityToken.Token, entityToken.Pin)
+	if err != nil {
+		t.Errorf("NewEntity(...) returned error %s; want no error\n", err)
+	}
+	// check if new entity has default role
+	if newEntity.Roles[0] != `application` {
+		t.Errorf("newEntity.Roles[0] != 'application'; want default role `application`\n")
+	}
+	// get identity token
+	identityToken, err := CheckIdentity(newEntity.Nick, newEntity.Password, `me`)
+	if err != nil {
+		t.Errorf("CheckIdentity(...)returned error %s; want no error\n", err)
+	}
+	// check authorization
+	if !IsAuthorized(identityToken.Token, `application`, `use`) {
+		t.Errorf("IsAuthorized(identityToken, `application`, `use` returned false; want true\n")
+	}
+}
+
+func TestRolesCheck(t *testing.T) {
+	// initialize embiam
+	Initialize(new(DbTransient))
+
+	// check #1
+	roleCache = RoleCacheMap{}
+	err := roleCache.checkConsistency()
+	if err != nil {
+		t.Errorf("roleCache.checkConsistency( #1 ) returned error %s; want no error\n", err)
+	}
+
+	// check #2
+	roleCache = RoleCacheMap{
+		`a`: {},
+	}
+	err = roleCache.checkConsistency()
+	if err != nil {
+		t.Errorf("roleCache.checkConsistency( #2 ) returned error %s; want no error\n", err)
+	}
+
+	// check #3
+	roleCache = RoleCacheMap{
+		`a`: {ContainedRole: []RoleIdType{}},
+	}
+	err = roleCache.checkConsistency()
+	if err != nil {
+		t.Errorf("roleCache.checkConsistency( #3 ) returned error %s; want no error\n", err)
+	}
+
+	// check #4
+	roleCache = RoleCacheMap{
+		`a`: {ContainedRole: []RoleIdType{`a`}},
+	}
+	err = roleCache.checkConsistency()
+	if err == nil {
+		t.Errorf("roleCache.checkConsistency( #4 ) returned NO error; want error for cycle\n")
+	}
+
+	// check #5
+	roleCache = RoleCacheMap{
+		`a`: {ContainedRole: []RoleIdType{`b`}},
+		`b`: {},
+	}
+	err = roleCache.checkConsistency()
+	if err != nil {
+		t.Errorf("roleCache.checkConsistency( #5 ) returned error %s; want no error\n", err)
+	}
+
+	// check #6
+	roleCache = RoleCacheMap{
+		`a`: {ContainedRole: []RoleIdType{`b`}},
+		`b`: {ContainedRole: []RoleIdType{`c`}},
+		`c`: {},
+	}
+	err = roleCache.checkConsistency()
+	if err != nil {
+		t.Errorf("roleCache.checkConsistency( #6 ) returned error %s; want no error\n", err)
+	}
+
+	// check #7
+	roleCache = RoleCacheMap{
+		`a`: {ContainedRole: []RoleIdType{`b`}},
+		`b`: {ContainedRole: []RoleIdType{`c`}},
+		`c`: {},
+	}
+	err = roleCache.checkConsistency()
+	if err != nil {
+		t.Errorf("roleCache.checkConsistency( #6 ) returned error %s; want no error\n", err)
+	}
+
+	// check #8
+	roleCache = RoleCacheMap{
+		`a`: {ContainedRole: []RoleIdType{`b`, `d`}},
+		`b`: {ContainedRole: []RoleIdType{`c`, `e`}},
+		`c`: {ContainedRole: []RoleIdType{`f`, `e`}},
+		`d`: {},
+		`e`: {},
+		`f`: {},
+	}
+	err = roleCache.checkConsistency()
+	if err != nil {
+		t.Errorf("roleCache.checkConsistency( #8 ) returned error %s; want no error\n", err)
+	}
+}
+
 func TestAuthNewEntity(t *testing.T) {
 	// initialize embiam
 	db := new(DbFile)
 	Initialize(db)
-
-	// clean up db
-	db.DeleteContentsFromDirectory(db.EntityFilePath)
-	InitializeDirectory(db.EntityDeletedFilePath) // recreate directory, deleted in step before
-	db.DeleteContentsFromDirectory(db.EntityTokenFilePath)
 
 	/*
 	   GENERATE ENTITY (users)
@@ -223,7 +333,7 @@ func TestAuthNewEntity(t *testing.T) {
 	// 1. generate entity token (they are provided by the adminitrator and used by the user to generate the entity)
 	entityToken, err := NewEntityToken()
 	if err != nil {
-		t.Errorf("entityToken.Save() returned error %s; want no error\n", err)
+		t.Errorf("NewEntityToken() returned error %s; want no error\n", err)
 	}
 
 	// 2. use entity token to generate entity
@@ -257,5 +367,4 @@ func TestAuthNewEntity(t *testing.T) {
 	} else {
 		log.Fatalln(err)
 	}
-
 }

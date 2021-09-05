@@ -46,7 +46,8 @@ type DbTransient struct {
 }
 
 func (m *DbTransient) Initialize() {
-	m.entityStore = make(map[string]Entity, 32)
+	m.entityStore = make(map[string]Entity)
+	m.entityTokenStore = make(map[string]EntityToken)
 }
 
 // ToDo: Reuqired???

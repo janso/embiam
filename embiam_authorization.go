@@ -8,15 +8,16 @@ import (
 // initializeAuthorization initializes the authorization sub system
 func initializeAuthorizations() {
 	// load roles
-	roles, _ := Db.readRoles()
-	if roles == nil {
-		roles = RoleCacheMap{}
+	roleCache = RoleCacheMap{}
+	ReadRoles()
+	if roleCache == nil {
+		roleCache = RoleCacheMap{}
 	}
-	if len(roles) == 0 {
+	if len(roleCache) == 0 {
 		log.Println("No roles loaded. Using minimal default roles")
 		// create example roleMap
-		roles = RoleCacheMap{
-			"embiam.admin": {
+		roleCache = RoleCacheMap{
+			"embiam": {
 				Authorization: []AuthorizationStruct{{
 					Ressource: "embiam",
 					Action:    ActionMap{ActionAsteriks: {}},
@@ -33,6 +34,7 @@ func initializeAuthorizations() {
 		}
 	}
 	// load default roles (for new entities)
+	defaultRoles = []RoleIdType{}
 	defaultRoles, _ = Db.readDefaultRoles()
 	if defaultRoles == nil {
 		defaultRoles = []RoleIdType{}
@@ -191,9 +193,62 @@ func (r *RoleCacheMap) getAuthorizationsForEntity(entity *Entity) ([]Authorizati
 	return authorizations, nil
 }
 
-func (r *RoleCacheMap) checkConsistency() error {
-	// ToDo: Implement
+func (r RoleCacheMap) checkConsistency() error {
+	cycleFreeRoles := map[RoleIdType]struct{}{}
+	// iterate all roles
+	for roleId, roleBody := range r {
+		// check referencial integrity of contained roles
+		for _, containedRoleId := range roleBody.ContainedRole {
+			if _, ok := r[containedRoleId]; !ok {
+				return fmt.Errorf("role %s contains undefined role %s", roleId, containedRoleId)
+			}
+		}
+		// check for cycle
+		if _, ok := cycleFreeRoles[roleId]; ok {
+			continue
+		}
+		// role doesn't have chilfren and can't lead to cycles
+		if roleBody.ContainedRole == nil {
+			cycleFreeRoles[roleId] = struct{}{}
+			continue
+		}
+		// check current role if the contained roles lead to a cycle
+		visitedRoles := map[RoleIdType]struct{}{}
+		if !r.hasRoleCycle(roleId, cycleFreeRoles, visitedRoles) {
+			// roleId creates no cycle - remember the checked roles to avoid duplicate checks
+			for visitedRole := range visitedRoles {
+				cycleFreeRoles[visitedRole] = struct{}{}
+			}
+		} else {
+			return fmt.Errorf("child of role %s leads to cycle", roleId)
+		}
+	}
 	return nil
+}
+
+func (r RoleCacheMap) hasRoleCycle(roleId RoleIdType, cycleFreeRoles, visitedRoles map[RoleIdType]struct{}) bool {
+	if visitedRoles == nil {
+		visitedRoles = map[RoleIdType]struct{}{}
+	}
+	if _, ok := visitedRoles[roleId]; ok {
+		// cycle detected
+		return true
+	}
+
+	// register current role as visited
+	visitedRoles[roleId] = struct{}{}
+
+	// check each contained role, if it leads to a cycle
+	roleBody := r[roleId]
+	if roleBody.ContainedRole == nil {
+		return false // no childrem, so cycle
+	}
+	for _, containedRoleId := range roleBody.ContainedRole {
+		if r.hasRoleCycle(containedRoleId, cycleFreeRoles, visitedRoles) {
+			return true
+		}
+	}
+	return false
 }
 
 // getAuthorizationsFromRole get all authorizations from a role
