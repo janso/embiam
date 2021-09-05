@@ -306,17 +306,42 @@ func TestRolesCheck(t *testing.T) {
 
 	// check #8
 	roleCache = RoleCacheMap{
-		`a`: {ContainedRole: []RoleIdType{`b`, `d`}},
-		`b`: {ContainedRole: []RoleIdType{`c`, `e`}},
-		`c`: {ContainedRole: []RoleIdType{`f`, `e`}},
+		`a`: {ContainedRole: []RoleIdType{`b`, `c`}},
+		`b`: {ContainedRole: []RoleIdType{`d`}},
+		`c`: {ContainedRole: []RoleIdType{`d`}},
 		`d`: {},
-		`e`: {},
-		`f`: {},
 	}
 	err = roleCache.checkConsistency()
 	if err != nil {
 		t.Errorf("roleCache.checkConsistency( #8 ) returned error %s; want no error\n", err)
 	}
+
+	// check #9
+	roleCache = RoleCacheMap{
+		`a`: {ContainedRole: []RoleIdType{`b`, ``}},
+	}
+	err = roleCache.checkConsistency()
+	if err == nil {
+		t.Errorf("roleCache.checkConsistency( #9 ) returned no error; want no error for empty role\n")
+	}
+
+	// check #10
+	roleCache = RoleCacheMap{
+		`a`:       {ContainedRole: []RoleIdType{`a.b`, `a.c`}},
+		`a.b`:     {ContainedRole: []RoleIdType{`a.c.f.x`}},
+		`a.c`:     {ContainedRole: []RoleIdType{`a.*.d`, `a.c.e`, `a.c.f`}},
+		`a.*.d`:   {ContainedRole: []RoleIdType{`a.*.d.o`}},
+		`a.*.d.o`: {},
+		`a.c.e`:   {},
+		`a.c.f`:   {ContainedRole: []RoleIdType{`a.c.f.x`, `a.c.f.y`}},
+		`a.c.f.x`: {},
+		`a.c.f.y`: {},
+	}
+	err = roleCache.checkConsistency()
+	if err != nil {
+		t.Errorf("roleCache.checkConsistency( #10 ) returned error %s; want no error\n", err)
+	}
+
 }
 
 func TestAuthNewEntity(t *testing.T) {

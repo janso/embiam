@@ -194,7 +194,7 @@ func (r *RoleCacheMap) getAuthorizationsForEntity(entity *Entity) ([]Authorizati
 }
 
 func (r RoleCacheMap) checkConsistency() error {
-	cycleFreeRoles := map[RoleIdType]struct{}{}
+	cycleFreeRoles := make(map[RoleIdType]struct{})
 	// iterate all roles
 	for roleId, roleBody := range r {
 		// check referencial integrity of contained roles
@@ -203,52 +203,45 @@ func (r RoleCacheMap) checkConsistency() error {
 				return fmt.Errorf("role %s contains undefined role %s", roleId, containedRoleId)
 			}
 		}
-		// check for cycle
-		if _, ok := cycleFreeRoles[roleId]; ok {
-			continue
-		}
-		// role doesn't have chilfren and can't lead to cycles
-		if roleBody.ContainedRole == nil {
-			cycleFreeRoles[roleId] = struct{}{}
-			continue
-		}
-		// check current role if the contained roles lead to a cycle
-		visitedRoles := map[RoleIdType]struct{}{}
-		if !r.hasRoleCycle(roleId, cycleFreeRoles, visitedRoles) {
-			// roleId creates no cycle - remember the checked roles to avoid duplicate checks
-			for visitedRole := range visitedRoles {
-				cycleFreeRoles[visitedRole] = struct{}{}
-			}
-		} else {
-			return fmt.Errorf("child of role %s leads to cycle", roleId)
+		// check current role for cycle
+		path := new([]RoleIdType)
+		if r.hasRoleCycle(roleId, &cycleFreeRoles, path) {
+			return fmt.Errorf("role %s leads to cycle", roleId)
 		}
 	}
 	return nil
 }
 
-func (r RoleCacheMap) hasRoleCycle(roleId RoleIdType, cycleFreeRoles, visitedRoles map[RoleIdType]struct{}) bool {
-	if visitedRoles == nil {
-		visitedRoles = map[RoleIdType]struct{}{}
-	}
-	if _, ok := visitedRoles[roleId]; ok {
-		// cycle detected
-		return true
-	}
-
-	// register current role as visited
-	visitedRoles[roleId] = struct{}{}
-
-	// check each contained role, if it leads to a cycle
-	roleBody := r[roleId]
-	if roleBody.ContainedRole == nil {
-		return false // no childrem, so cycle
-	}
-	for _, containedRoleId := range roleBody.ContainedRole {
-		if r.hasRoleCycle(containedRoleId, cycleFreeRoles, visitedRoles) {
+// checks if roleId contains a cycle (see graph theorie, depth-first-search DFS)
+func (r RoleCacheMap) hasRoleCycle(roleId RoleIdType, cycleFreeRoles *map[RoleIdType]struct{}, path *[]RoleIdType) bool {
+	// check for cycle: if path contains roleId, a cycle is detected
+	for _, pathRoleId := range *path { // improve for long paths
+		if roleId == pathRoleId {
 			return true
 		}
 	}
-	return false
+	// check each contained role, if it leads to a cycle
+	hasCycle := false
+	roleBody := r[roleId]
+	if roleBody.ContainedRole == nil || len(roleBody.ContainedRole) == 0 {
+		// current role doesn't contain any roles: register as cycle-free
+		(*cycleFreeRoles)[roleId] = struct{}{}
+	} else {
+		// add current role to path
+		*path = append(*path, roleId)
+		// check contained roles for cycles
+		for _, containedRoleId := range roleBody.ContainedRole {
+			if r.hasRoleCycle(containedRoleId, cycleFreeRoles, path) {
+				hasCycle = true
+				break
+			}
+			// containedRoleId doesn't have a cycle: register as cycle-free
+			(*cycleFreeRoles)[containedRoleId] = struct{}{}
+		}
+		// remove current role from path
+		*path = (*path)[0 : len(*path)-1]
+	}
+	return hasCycle
 }
 
 // getAuthorizationsFromRole get all authorizations from a role
